@@ -37,6 +37,9 @@ export const VIEW_SEATS = {
 
 export const START_SCORE = 25000;
 
+/** Riichi dead wall (王牌). Live draws stop when only these remain → 流局. */
+export const DEAD_WALL = 14;
+
 export type SeatState = {
   hand: TileId[];
   river: TileId[];
@@ -69,6 +72,11 @@ export type MatchState = {
 export function nextSeat(seat: Seat): Seat {
   const i = SEAT_ORDER.indexOf(seat);
   return SEAT_ORDER[(i + 1) % 4];
+}
+
+/** Tiles left that can still be drawn (excludes 王牌). */
+export function liveWallCount(state: MatchState): number {
+  return Math.max(0, state.wall.length - DEAD_WALL);
 }
 
 export function createMatch(): MatchState {
@@ -117,12 +125,12 @@ export function allRivers(state: MatchState): TileId[] {
 /** Draw one tile for current turn. No-op if already drawn or ended. */
 export function drawForTurn(state: MatchState): MatchState {
   if (state.phase !== "playing" || state.hasDrawn) return state;
-  if (state.wall.length === 0) {
+  if (state.wall.length <= DEAD_WALL) {
     return {
       ...state,
       phase: "ended",
       endKind: "ryuukyoku",
-      endReason: "流局（山がなくなりました）",
+      endReason: "流局（荒牌）",
     };
   }
   const tile = state.wall[state.wall.length - 1];
@@ -237,12 +245,12 @@ export function discardFromTurn(state: MatchState, tile: TileId): MatchState {
     }
   }
 
-  if (nextState.wall.length === 0 && cands.length === 0) {
+  if (nextState.wall.length <= DEAD_WALL && cands.length === 0) {
     nextState = {
       ...nextState,
       phase: "ended",
       endKind: "ryuukyoku",
-      endReason: "流局（山がなくなりました）",
+      endReason: "流局（荒牌）",
     };
   }
 
@@ -253,6 +261,24 @@ export function discardFromTurn(state: MatchState, tile: TileId): MatchState {
 export function cpuPickDiscard(state: MatchState): TileId {
   const hand = state.seats[state.turn].hand;
   return chooseCpuDiscard(hand, allRivers(state), state.wall.length);
+}
+
+/**
+ * After human declines ron: CPU may still ron; else if wall exhausted → 流局.
+ */
+export function afterRonPass(state: MatchState): MatchState {
+  if (state.phase !== "playing") return state;
+  const cands = ronCandidates(state).filter((s) => s !== HUMAN_SEAT);
+  if (cands[0]) return declareRon(state, cands[0]);
+  if (state.wall.length <= DEAD_WALL) {
+    return {
+      ...state,
+      phase: "ended",
+      endKind: "ryuukyoku",
+      endReason: "流局（荒牌）",
+    };
+  }
+  return state;
 }
 
 export function endPractice(

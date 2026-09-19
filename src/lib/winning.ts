@@ -1,4 +1,6 @@
-import type { TileId } from "./tiles";
+import { ALL_TILE_IDS, type TileId } from "./tiles";
+
+const TILE_ORDER = new Map(ALL_TILE_IDS.map((id, i) => [id, i]));
 
 function countMap(tiles: TileId[]): Map<TileId, number> {
   const m = new Map<TileId, number>();
@@ -23,6 +25,21 @@ function parseNumber(
   return null;
 }
 
+/** Lowest tile still present — order must not depend on hand / Map insertion. */
+function earliestTile(counts: Map<TileId, number>): TileId | null {
+  let best: TileId | null = null;
+  let bestOrd = Infinity;
+  for (const [t, c] of counts) {
+    if (c <= 0) continue;
+    const ord = TILE_ORDER.get(t) ?? 999;
+    if (ord < bestOrd) {
+      bestOrd = ord;
+      best = t;
+    }
+  }
+  return best;
+}
+
 /** Seven pairs (チートイツ). */
 function isSevenPairs(tiles: TileId[]): boolean {
   if (tiles.length !== 14) return false;
@@ -36,7 +53,7 @@ function isSevenPairs(tiles: TileId[]): boolean {
 
 /**
  * Try to remove 4 mentsu from remaining counts (after pair removed).
- * Greedy recursive: prefer triplets, then sequences.
+ * Always consume the earliest remaining tile (standard recursive check).
  */
 function canFormMentsu(counts: Map<TileId, number>, remaining: number): boolean {
   if (remaining === 0) {
@@ -46,14 +63,7 @@ function canFormMentsu(counts: Map<TileId, number>, remaining: number): boolean 
     return true;
   }
 
-  // Find first tile with count > 0
-  let tile: TileId | null = null;
-  for (const [t, c] of counts) {
-    if (c > 0) {
-      tile = t;
-      break;
-    }
-  }
+  const tile = earliestTile(counts);
   if (!tile) return remaining === 0;
 
   const c = counts.get(tile) || 0;
@@ -65,7 +75,7 @@ function canFormMentsu(counts: Map<TileId, number>, remaining: number): boolean 
     if (canFormMentsu(next, remaining - 1)) return true;
   }
 
-  // Sequence (number tiles only)
+  // Sequence (number tiles only) — must start at `tile`
   const num = parseNumber(tile);
   if (num && num.n <= 7) {
     const t2 = `${num.n + 1}${num.suit}` as TileId;

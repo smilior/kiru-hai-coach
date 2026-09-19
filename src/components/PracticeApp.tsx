@@ -11,6 +11,7 @@ import {
   SEAT_LABEL,
   START_SCORE,
   VIEW_SEATS,
+  afterRonPass,
   allRivers,
   canTsumo,
   createMatch,
@@ -21,13 +22,14 @@ import {
   drawForTurn,
   endPractice,
   formatScore,
+  liveWallCount,
   ronCandidates,
   type MatchState,
   type Seat,
 } from "@/lib/practice";
 
 const PLAYER_KEY = "khc_player_id";
-const CPU_DELAY_MS = 750;
+const CPU_DELAY_MS = 420;
 /** Tenhou / 電脳麻将 style: 6 tiles per river row. */
 const RIVER_ROW = 6;
 
@@ -329,7 +331,6 @@ export function PracticeApp({ onExit }: Props) {
   });
   const [ronPassKey, setRonPassKey] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [showRyuukyoku, setShowRyuukyoku] = useState(false);
   const cpuTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const lastDiscardKey = match.lastDiscard
@@ -371,7 +372,6 @@ export function PracticeApp({ onExit }: Props) {
     setError(null);
     setRonPassKey(null);
     setSettingsOpen(false);
-    setShowRyuukyoku(false);
   }, []);
 
   useEffect(() => {
@@ -475,11 +475,9 @@ export function PracticeApp({ onExit }: Props) {
 
   function onTileTap(tile: TileId) {
     if (!humanTurn) return;
-    if (selected === tile) {
-      humanDiscard(tile);
-      return;
-    }
+    // Single tap discards (large hand targets). Selection still used for 切る / coach.
     setSelected(tile);
+    humanDiscard(tile);
   }
 
   async function askCoach() {
@@ -607,18 +605,14 @@ export function PracticeApp({ onExit }: Props) {
           <button
             type="button"
             onClick={() => {
-              if (match.phase === "ended") {
-                setShowRyuukyoku(true);
-              } else {
-                setMatch((m) =>
-                  endPractice(m, "流局（表示）— 山を残して終了しました。")
-                );
-                setShowRyuukyoku(true);
+              if (match.phase === "playing") {
+                setMatch((m) => endPractice(m, "練習を終了しました。"));
               }
             }}
-            className="min-h-[36px] rounded border border-white/40 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 sm:text-xs"
+            disabled={match.phase === "ended"}
+            className="min-h-[36px] rounded border border-white/40 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 disabled:opacity-40 sm:text-xs"
           >
-            流局を表示
+            練習終了
           </button>
           <button
             type="button"
@@ -682,7 +676,7 @@ export function PracticeApp({ onExit }: Props) {
 
             <CenterBox
               roundLabel={match.roundLabel}
-              remaining={match.wall.length}
+              remaining={liveWallCount(match)}
               turn={match.turn}
               phase={match.phase}
               doraIndicator={match.doraIndicator}
@@ -729,7 +723,10 @@ export function PracticeApp({ onExit }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => setRonPassKey(lastDiscardKey)}
+                onClick={() => {
+                  setRonPassKey(lastDiscardKey);
+                  setMatch((m) => afterRonPass(m));
+                }}
                 className="min-h-[44px] rounded-lg border border-white/40 bg-black/30 px-5 py-2.5 text-sm font-medium text-white"
               >
                 スルー
@@ -737,13 +734,24 @@ export function PracticeApp({ onExit }: Props) {
             </div>
           )}
 
-          {(match.phase === "ended" || showRyuukyoku) && (
-            <div className="mb-2 rounded-xl border border-white/25 bg-emerald-950/90 px-3 py-3 text-center">
-              <p className="text-sm font-semibold text-white">
-                {match.endReason || "流局"}
+          {match.phase === "ended" && (
+            <div
+              className="mb-2 rounded-xl border-2 border-amber-400/70 bg-emerald-950/95 px-3 py-3 text-center shadow-lg"
+              role="status"
+              aria-live="polite"
+            >
+              <p className="text-lg font-black tracking-wide text-amber-200">
+                {match.endKind === "agari"
+                  ? "和了"
+                  : match.endKind === "ryuukyoku"
+                    ? "流局"
+                    : "終局"}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-white">
+                {match.endReason || "局が終了しました"}
               </p>
               <p className="mt-1 text-[10px] text-white/60">
-                ※ 簡易ルール（役・点数・鳴きなし。形完成のツモ/ロンのみ）
+                ※ 簡易ルール（役・点数・鳴きなし。4面子1雀頭 / 七対子のツモ・ロン、荒牌流局）
               </p>
               <div className="mt-2 flex justify-center gap-2">
                 <button
@@ -753,13 +761,15 @@ export function PracticeApp({ onExit }: Props) {
                 >
                   もう一度
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setShowRyuukyoku(false)}
-                  className="min-h-[44px] rounded-lg border border-white/30 px-3 py-2 text-xs text-white"
-                >
-                  閉じる
-                </button>
+                {onExit && (
+                  <button
+                    type="button"
+                    onClick={onExit}
+                    className="min-h-[44px] rounded-lg border border-white/30 px-3 py-2 text-xs text-white"
+                  >
+                    レッスンに戻る
+                  </button>
+                )}
               </div>
             </div>
           )}
