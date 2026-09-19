@@ -23,14 +23,19 @@ type Props = {
 
 const SIZE = {
   xs: { w: 22, h: 30 },
-  /** River / discard pond — smaller than hand for neat Tenhou ponds. */
   river: { w: 16, h: 22 },
   sm: { w: 32, h: 44 },
-  /** Own hand — compact so the table stays glanceable. */
   hand: { w: 28, h: 40 },
   md: { w: 48, h: 64 },
   lg: { w: 56, h: 76 },
 };
+
+function rotClass(rotate: 0 | 90 | -90 | 180): string {
+  if (rotate === 90) return "tile-rot-90";
+  if (rotate === -90) return "tile-rot-neg90";
+  if (rotate === 180) return "tile-rot-180";
+  return "tile-rot-0";
+}
 
 export function TileButton({
   tile,
@@ -51,7 +56,8 @@ export function TileButton({
   const boxW = sideways ? h : w;
   const boxH = sideways ? w : h;
   const className = [
-    "relative shrink-0 rounded-md transition-transform touch-manipulation",
+    "relative shrink-0 rounded-md touch-manipulation",
+    size !== "river" ? "transition-transform" : "",
     !faceOnly && onClick ? "active:scale-95" : "",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300",
     showGlow ? "-translate-y-1.5 ring-2 ring-amber-300/90" : "",
@@ -62,18 +68,50 @@ export function TileButton({
     extraClass,
   ].join(" ");
 
-  const faceRing =
-    size === "river"
-      ? "bg-white shadow-md ring-1 ring-stone-500/70"
-      : "bg-white shadow-sm ring-1 ring-stone-300/80";
+  // Rivers: plain <img> + CSS rotate class (Next/Image + inline transform was a no-op in prod QA).
+  if (size === "river") {
+    const face = (
+      <span
+        className={`tile-rot-box ${rotClass(rotate)}`}
+        style={{ width: boxW, height: boxH }}
+        data-rotate={rotate}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={TILE_IMAGE[tile]}
+          alt={TILE_NAME_JA[tile]}
+          width={w}
+          height={h}
+          draggable={false}
+          className="tile-rot-face bg-white shadow-md ring-1 ring-stone-500/70 rounded-sm"
+          style={{ width: w, height: h }}
+        />
+      </span>
+    );
+    if (faceOnly || !onClick) {
+      return (
+        <span className={className} aria-label={TILE_NAME_JA[tile]}>
+          {face}
+        </span>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={TILE_NAME_JA[tile]}
+        className={className}
+      >
+        {face}
+      </button>
+    );
+  }
+
+  const faceRing = "bg-white shadow-sm ring-1 ring-stone-300/80";
   const img = (
     <span
       className={`relative block overflow-hidden rounded-sm ${faceRing}`}
-      style={{
-        width: w,
-        height: h,
-        transform: rotate ? `rotate(${rotate}deg)` : undefined,
-      }}
+      style={{ width: w, height: h }}
     >
       <Image
         src={TILE_IMAGE[tile]}
@@ -82,7 +120,7 @@ export function TileButton({
         height={h}
         className="h-full w-full object-contain"
         draggable={false}
-        priority={size !== "xs" && size !== "river"}
+        priority={size !== "xs"}
       />
     </span>
   );
@@ -90,7 +128,7 @@ export function TileButton({
   const body = (
     <span
       className="inline-flex items-center justify-center"
-      style={{ width: boxW, height: boxH }}
+      style={{ width: w, height: h }}
     >
       {img}
     </span>

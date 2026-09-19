@@ -173,3 +173,29 @@ body {
   overflow: visible;
   z-index: 1;
 }
+
+
+/* Seat river tile rotation (authoritative — do not rely on inline transform alone) */
+.tile-rot-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+.tile-rot-face {
+  display: block;
+  object-fit: contain;
+  transform-origin: center center;
+}
+.tile-rot-0 .tile-rot-face {
+  transform: none;
+}
+.tile-rot-90 .tile-rot-face {
+  transform: rotate(90deg);
+}
+.tile-rot-neg90 .tile-rot-face {
+  transform: rotate(-90deg);
+}
+.tile-rot-180 .tile-rot-face {
+  transform: rotate(180deg);
+}
