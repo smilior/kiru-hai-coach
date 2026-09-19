@@ -97,15 +97,16 @@ body {
 }
 
 
-/* Fixed center table: rivers grow without shifting the kyoku/dora box */
+/*
+ * Fixed center table: absolute rivers around a pinned kyoku box.
+ * Discards grow outward; center never reflows.
+ * CenterBox is h-[5.25rem]/w-[5.75rem] (sm: h-24/w-28).
+ */
 .practice-table-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  grid-template-rows: auto auto auto;
-  align-items: center;
-  justify-items: center;
-  column-gap: 4px;
-  row-gap: 2px;
+  --center-h: 5.25rem;
+  --center-w: 5.75rem;
+  --river-gap: 4px;
+  position: relative;
   width: 100%;
   max-width: 56rem;
   margin-inline: auto;
@@ -113,37 +114,62 @@ body {
   min-height: 0;
   overflow: visible;
 }
-.practice-table-top {
-  grid-column: 2;
-  grid-row: 1;
-  align-self: end;
-  justify-self: center;
-  overflow: visible;
-}
-.practice-table-left {
-  grid-column: 1;
-  grid-row: 2;
-  justify-self: end;
-  align-self: center;
-  overflow: visible;
+@media (min-width: 640px) {
+  .practice-table-grid {
+    --center-h: 6rem;
+    --center-w: 7rem;
+  }
 }
 .practice-table-center {
-  grid-column: 2;
-  grid-row: 2;
-  justify-self: center;
-  align-self: center;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
 }
-.practice-table-right {
-  grid-column: 3;
-  grid-row: 2;
-  justify-self: start;
-  align-self: center;
+.practice-table-top {
+  position: absolute;
+  left: 50%;
+  bottom: calc(50% + (var(--center-h) / 2) + var(--river-gap));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
   overflow: visible;
+  z-index: 1;
 }
 .practice-table-bottom {
-  grid-column: 2;
-  grid-row: 3;
-  align-self: start;
-  justify-self: center;
+  position: absolute;
+  left: 50%;
+  top: calc(50% + (var(--center-h) / 2) + var(--river-gap));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
   overflow: visible;
+  z-index: 1;
+}
+.practice-table-left {
+  position: absolute;
+  top: 50%;
+  right: calc(50% + (var(--center-w) / 2) + var(--river-gap));
+  transform: translateY(-50%);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  overflow: visible;
+  z-index: 1;
+}
+.practice-table-right {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + (var(--center-w) / 2) + var(--river-gap));
+  transform: translateY(-50%);
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  overflow: visible;
+  z-index: 1;
 }
