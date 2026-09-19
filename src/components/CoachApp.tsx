@@ -27,7 +27,7 @@ type CoachResponse = {
 };
 
 export function CoachApp() {
-  const [hand, setHand] = useState<TileId[]>([]);
+  const [hand, setHand] = useState<TileId[]>(() => sortHand(dealHand14()));
   const [selected, setSelected] = useState<TileId | null>(null);
   const [difficulty, setDifficulty] = useState<LessonId>("beginner");
   const [progress, setProgress] = useState<Record<LessonId, LessonStatus>>(
@@ -52,10 +52,6 @@ export function CoachApp() {
     setResult(null);
     setError(null);
   }, []);
-
-  useEffect(() => {
-    deal();
-  }, [deal]);
 
   useEffect(() => {
     const stored =
