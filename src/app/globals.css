@@ -57,9 +57,21 @@ body {
 }
 .practice-river-block--stack {
   flex-direction: column;
+  gap: 0; /* 自家: 二列目以降の上下行間を詰める */
 }
 .practice-river-block--stack-from-center {
   flex-direction: column-reverse;
+  gap: 0; /* 対面: 二列目以降の上下行間を詰める */
+}
+.practice-river-block--stack .practice-river-row,
+.practice-river-block--stack-from-center .practice-river-row {
+  margin: 0;
+  line-height: 0;
+}
+.practice-river-block--stack .tile-rot-box,
+.practice-river-block--stack-from-center .tile-rot-box {
+  margin: 0;
+  line-height: 0;
 }
 .practice-river-block--side-left {
   flex-direction: row-reverse; /* col0 nearest center */

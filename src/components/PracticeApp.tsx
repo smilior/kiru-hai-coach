@@ -888,7 +888,10 @@ export function PracticeApp({ onExit }: Props) {
         </div>
 
         {coach && (
-          <section className="absolute bottom-20 left-2 right-2 z-50 mx-auto max-h-[40vh] max-w-lg overflow-y-auto rounded-xl border border-white/30 bg-emerald-950/95 p-3 text-white shadow-2xl sm:bottom-24">
+          <section
+            className="absolute left-2 top-14 z-50 max-h-[min(42vh,20rem)] w-[min(22rem,calc(100%-5.5rem))] overflow-y-auto rounded-xl border border-white/30 bg-emerald-950/95 p-3 text-white shadow-2xl sm:left-3 sm:top-16"
+            aria-label="切牌解説"
+          >
             <div className="mb-1 flex items-start justify-between gap-2">
               <h2 className="text-xs font-semibold text-amber-200">
                 推奨: {TILE_NAME_JA[coach.discard]}（{coach.discard}）
