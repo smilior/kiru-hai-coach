@@ -7,13 +7,7 @@ const DIFFS: Difficulty[] = ["beginner", "intermediate", "advanced"];
 
 export async function POST(req: NextRequest) {
   try {
-    if (!process.env.AI_GATEWAY_API_KEY) {
-      return NextResponse.json(
-        { error: "AI_GATEWAY_API_KEY is not configured" },
-        { status: 503 }
-      );
-    }
-
+    // AI Gateway auth: AI_GATEWAY_API_KEY or Vercel OIDC (automatic on Vercel)
     const body = await req.json();
     const handRaw = body.hand;
     const difficulty: Difficulty = DIFFS.includes(body.difficulty)
