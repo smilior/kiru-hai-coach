@@ -15,6 +15,8 @@ type Props = {
   faceOnly?: boolean;
   /** Soft yellow glow for table selection (matches riichi UI). */
   glow?: boolean;
+  /** Optional wrapper class (e.g. scale on narrow phones). */
+  className?: string;
 };
 
 const SIZE = {
@@ -35,6 +37,7 @@ export function TileButton({
   size = "md",
   faceOnly,
   glow,
+  className: extraClass = "",
 }: Props) {
   const { w, h } = SIZE[size];
   const showGlow = glow || selected;
@@ -49,18 +52,25 @@ export function TileButton({
     highlighted && !showGlow ? "ring-2 ring-amber-400" : "",
     dimmed ? "opacity-40" : "",
     onClick && !faceOnly ? "cursor-pointer hover:-translate-y-1" : "cursor-default",
+    extraClass,
   ].join(" ");
 
+  // Suit PNGs are transparent; white face makes tiles readable on felt.
   const img = (
-    <Image
-      src={TILE_IMAGE[tile]}
-      alt={TILE_NAME_JA[tile]}
-      width={w}
-      height={h}
-      className="rounded-sm shadow-sm"
-      draggable={false}
-      priority={size !== "xs"}
-    />
+    <span
+      className="relative block overflow-hidden rounded-sm bg-white shadow-sm ring-1 ring-stone-300/80"
+      style={{ width: w, height: h }}
+    >
+      <Image
+        src={TILE_IMAGE[tile]}
+        alt={TILE_NAME_JA[tile]}
+        width={w}
+        height={h}
+        className="h-full w-full object-contain"
+        draggable={false}
+        priority={size !== "xs"}
+      />
+    </span>
   );
 
   if (faceOnly || !onClick) {
