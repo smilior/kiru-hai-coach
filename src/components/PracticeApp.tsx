@@ -608,7 +608,13 @@ export function PracticeApp({ onExit }: Props) {
         aria-hidden
       />
 
-      <div className="relative flex min-h-0 flex-1 flex-col px-2 pb-1 pt-2 sm:px-3 sm:pt-3">
+      <div
+        className={[
+          "relative flex min-h-0 flex-1 flex-col px-2 pb-1 pt-2 sm:px-3 sm:pt-3",
+          // Reserve right gutter when Jev is open so rivers/hand never sit under the panel
+          coach ? "pr-[min(17rem,40vw)] sm:pr-[min(18rem,36vw)]" : "",
+        ].join(" ")}
+      >
         {/* Corner scores (Tenhou-like) + dora top-right readable */}
         <div className="relative z-10 mb-1 flex shrink-0 items-start justify-between gap-2 px-1">
           <div className="space-y-0.5">
@@ -887,10 +893,10 @@ export function PracticeApp({ onExit }: Props) {
           )}
         </div>
 
-        {/* Jev 解説: narrow right dock under HUD — clears own river + hand (closable, non-modal) */}
+        {/* Jev 解説: fixed viewport-right gutter (outside table) — never covers tiles */}
         {coach && (
           <section
-            className="absolute right-2 top-14 z-50 flex w-[min(16.5rem,36vw)] max-h-[calc(100%-7.25rem)] flex-col overflow-hidden rounded-xl border border-white/30 bg-emerald-950/95 p-2.5 text-white shadow-2xl sm:right-3 sm:top-16 sm:w-[min(17.5rem,34vw)] sm:p-3"
+            className="fixed right-1 top-12 bottom-14 z-[60] flex w-[min(16rem,38vw)] flex-col overflow-hidden rounded-xl border border-white/30 bg-emerald-950/95 p-2.5 text-white shadow-2xl sm:right-2 sm:top-14 sm:bottom-16 sm:w-[min(17rem,34vw)] sm:p-3"
             role="complementary"
             aria-label="切牌解説"
           >
