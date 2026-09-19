@@ -7,7 +7,7 @@ import {
 } from "@/lib/lessons";
 import { newPlayerId, PLAYER_COOKIE } from "@/lib/player";
 
-export const preferredRegion = 'hnd1';
+export const preferredRegion = "hnd1";
 
 const LESSON_IDS: LessonId[] = ["beginner", "intermediate", "advanced"];
 
@@ -55,7 +55,54 @@ async function loadProgress(playerId: string) {
     const st = parseStatus(row.status);
     if (lid && st) progress[lid] = st;
   }
+
+  // Safety net: if a lesson is cleared, ensure the next is not locked
+  if (
+    progress.beginner === "cleared" &&
+    progress.intermediate === "locked"
+  ) {
+    progress.intermediate = "in_progress";
+  }
+  if (
+    progress.intermediate === "cleared" &&
+    progress.advanced === "locked"
+  ) {
+    progress.advanced = "in_progress";
+  }
+
   return progress;
+}
+
+/** Unlock next lesson after clear; persist if still locked in DB. */
+async function unlockNext(playerId: string, cleared: LessonId) {
+  const db = getDb();
+  const next: LessonId | null =
+    cleared === "beginner"
+      ? "intermediate"
+      : cleared === "intermediate"
+        ? "advanced"
+        : null;
+  if (!next) return;
+
+  await db.execute({
+    sql: `INSERT INTO lesson_progress (player_id, lesson_id, status, updated_at)
+          VALUES (?, ?, 'in_progress', datetime('now'))
+          ON CONFLICT(player_id, lesson_id) DO UPDATE SET
+            status = CASE
+              WHEN lesson_progress.status = 'locked' THEN 'in_progress'
+              ELSE lesson_progress.status
+            END,
+            updated_at = datetime('now')`,
+    args: [playerId, next],
+  });
+
+  // Explicit UPDATE as fallback (some libsql builds are picky with CASE in UPSERT)
+  await db.execute({
+    sql: `UPDATE lesson_progress
+          SET status = 'in_progress', updated_at = datetime('now')
+          WHERE player_id = ? AND lesson_id = ? AND status = 'locked'`,
+    args: [playerId, next],
+  });
 }
 
 function withPlayerCookie(res: NextResponse, playerId: string) {
@@ -92,6 +139,22 @@ export async function GET(req: NextRequest) {
 
     await ensurePlayer(playerId);
     await seedDefaultProgress(playerId);
+
+    // Heal stuck locks if prior clears didn't unlock
+    const raw = await loadProgress(playerId);
+    if (
+      raw.beginner === "cleared" &&
+      (await needsUnlock(playerId, "intermediate"))
+    ) {
+      await unlockNext(playerId, "beginner");
+    }
+    if (
+      raw.intermediate === "cleared" &&
+      (await needsUnlock(playerId, "advanced"))
+    ) {
+      await unlockNext(playerId, "intermediate");
+    }
+
     const progress = await loadProgress(playerId);
     return withPlayerCookie(
       NextResponse.json({ player_id: playerId, progress }),
@@ -104,6 +167,16 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function needsUnlock(playerId: string, lessonId: LessonId) {
+  const db = getDb();
+  const rs = await db.execute({
+    sql: `SELECT status FROM lesson_progress WHERE player_id = ? AND lesson_id = ?`,
+    args: [playerId, lessonId],
+  });
+  const st = rs.rows[0]?.status;
+  return st == null || st === "locked";
 }
 
 export async function PUT(req: NextRequest) {
@@ -135,27 +208,8 @@ export async function PUT(req: NextRequest) {
         args: [playerId, lessonId, status],
       });
 
-      // Unlock next lesson when clearing
       if (status === "cleared") {
-        const next =
-          lessonId === "beginner"
-            ? "intermediate"
-            : lessonId === "intermediate"
-              ? "advanced"
-              : null;
-        if (next) {
-          await db.execute({
-            sql: `INSERT INTO lesson_progress (player_id, lesson_id, status, updated_at)
-                  VALUES (?, ?, 'in_progress', datetime('now'))
-                  ON CONFLICT(player_id, lesson_id) DO UPDATE SET
-                    status = CASE
-                      WHEN lesson_progress.status = 'locked' THEN 'in_progress'
-                      ELSE lesson_progress.status
-                    END,
-                    updated_at = datetime('now')`,
-            args: [playerId, next],
-          });
-        }
+        await unlockNext(playerId, lessonId);
       }
     }
 

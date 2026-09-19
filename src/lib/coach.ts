@@ -53,10 +53,71 @@ function difficultyContext(difficulty: Difficulty): string {
   return "難易度: 上級。効率・安全・待ちの質（良形/愚形）・押し引きを総合判断。";
 }
 
+/** Map Jev choice (tile id, Japanese name, or criteria text) back to a hand tile. */
+export function resolveDiscardChoice(
+  choice: unknown,
+  hand: TileId[]
+): TileId | null {
+  if (choice == null) return null;
+  const raw = String(choice).trim();
+  if (!raw) return null;
+
+  if (isTileId(raw) && hand.includes(raw)) return raw;
+
+  // Exact Japanese name
+  for (const id of hand) {
+    if (TILE_NAME_JA[id] === raw) return id;
+  }
+
+  // Criteria text like "五萬（5m）を切る" or containing "(5m)"
+  const paren = raw.match(/\(([1-9][mps]|[ESWNPFC])\)/);
+  if (paren && isTileId(paren[1]) && hand.includes(paren[1] as TileId)) {
+    return paren[1] as TileId;
+  }
+
+  // Substring tile id
+  for (const id of [...new Set(hand)]) {
+    if (raw.includes(id) || raw.includes(TILE_NAME_JA[id])) {
+      if (hand.includes(id)) return id;
+    }
+  }
+
+  return null;
+}
+
+function extractDiscardAnswer(answers: Record<string, unknown>): unknown {
+  const d = answers.discard;
+  if (d == null) return null;
+  if (typeof d === "string") return d;
+  if (typeof d === "object") {
+    const obj = d as Record<string, unknown>;
+    if (typeof obj.choice === "string") return obj.choice;
+    if (typeof obj.value === "string") return obj.value;
+    if (typeof obj.id === "string") return obj.id;
+  }
+  return null;
+}
+
+function extractScore(
+  answers: Record<string, unknown>,
+  key: string
+): number {
+  const v = answers[key];
+  if (v == null) return 2;
+  if (typeof v === "number") return v;
+  if (typeof v === "object" && v !== null) {
+    const obj = v as Record<string, unknown>;
+    if (typeof obj.score === "number") return obj.score;
+    if (typeof obj.value === "number") return obj.value;
+  }
+  return 2;
+}
+
 export async function evaluateDiscard(
   hand: TileId[],
   difficulty: Difficulty,
-  river: TileId[] = []
+  river: TileId[] = [],
+  mode: "solo" | "vs-cpu" = "solo"
 ): Promise<CoachResult> {
   const unique = [...new Set(hand)];
   const criteria: Record<string, string> = {};
@@ -65,20 +126,27 @@ export async function evaluateDiscard(
   }
 
   const state = {
-    game: "リーチ麻雀（1人用コーチ・簡略ルール）",
+    game:
+      mode === "vs-cpu"
+        ? "リーチ麻雀（実戦練習・あなた＋CPU3・簡略ルール）"
+        : "リーチ麻雀（1人用コーチ・簡略ルール）",
+    mode,
     difficulty,
     context: difficultyContext(difficulty),
     hand: hand.map((id) => ({ id, name: TILE_NAME_JA[id] })),
     handCodes: hand,
     river,
-    task: "14枚の手牌から、今切るべき1枚を選ぶ。ツモ牌は手牌の最後の要素として扱う。",
+    task:
+      mode === "vs-cpu"
+        ? "14枚の手牌から切る1枚を選ぶ。河も参考に安全を意識。ツモは手牌の最後。discard は handCodes の牌コード（例: 5m）を返すこと。"
+        : "14枚の手牌から、今切るべき1枚を選ぶ。ツモ牌は手牌の最後の要素として扱う。回答の discard は handCodes にある牌コード（例: 5m）をそのまま返すこと。",
   };
 
   const questions: Record<string, unknown> = {
     discard: {
       type: "choice",
       instructions:
-        "手牌から切るべき1枚を選んでください。難易度の優先順位に従ってください。",
+        "手牌から切るべき1枚を、criteria のキー（牌コード）で選んでください。難易度の優先順位に従ってください。",
       criteria,
     },
     efficiency: {
@@ -87,56 +155,29 @@ export async function evaluateDiscard(
         "選んだ切り方の効率（受け入れ・進行速度）を評価してください。",
       criteria: scoreCriteria(difficulty),
     },
-  };
-
-  if (difficulty === "intermediate" || difficulty === "advanced") {
-    questions.safety = {
-      type: "score",
-      instructions: "選んだ切り方の安全度（振り込みにくさ）を評価してください。",
-      criteria: [
-        "危険: 振り込みやすい",
-        "やや危険",
-        "普通",
-        "安全: 振り込みにくい",
-      ],
-    };
-  }
-
-  if (difficulty === "advanced") {
-    questions.wait = {
+    safety: {
       type: "score",
       instructions:
-        "切ったあとの待ちの質（広さ・良形かどうか）を評価してください。",
-      criteria: [
-        "愚形・狭い",
-        "やや狭い",
-        "普通",
-        "良形・広い",
-      ],
-    };
-  }
-
-  // beginner still needs wait score for schema lock {efficiency,safety,wait}
-  if (difficulty === "beginner") {
-    questions.safety = {
+        difficulty === "beginner"
+          ? "安全度の参考評価（初級では優先度低）。"
+          : "選んだ切り方の安全度（振り込みにくさ）を評価してください。",
+      criteria:
+        difficulty === "advanced" || difficulty === "intermediate"
+          ? ["危険: 振り込みやすい", "やや危険", "普通", "安全: 振り込みにくい"]
+          : ["危険", "やや危険", "普通", "安全"],
+    },
+    wait: {
       type: "score",
-      instructions: "安全度の参考評価（初級では優先度低）。",
-      criteria: ["危険", "やや危険", "普通", "安全"],
-    };
-    questions.wait = {
-      type: "score",
-      instructions: "待ちの質の参考評価（初級では優先度低）。",
-      criteria: ["狭い", "やや狭い", "普通", "広い"],
-    };
-  }
-
-  if (difficulty === "intermediate") {
-    questions.wait = {
-      type: "score",
-      instructions: "待ちの質の参考評価（中級では補助）。",
-      criteria: ["狭い", "やや狭い", "普通", "広い"],
-    };
-  }
+      instructions:
+        difficulty === "advanced"
+          ? "切ったあとの待ちの質（広さ・良形かどうか）を評価してください。"
+          : "待ちの質の参考評価。",
+      criteria:
+        difficulty === "advanced"
+          ? ["愚形・狭い", "やや狭い", "普通", "良形・広い"]
+          : ["狭い", "やや狭い", "普通", "広い"],
+    },
+  };
 
   const result = await evaluate({
     model: "typesafe-ai/jev",
@@ -144,26 +185,20 @@ export async function evaluateDiscard(
     questions: questions as Parameters<typeof evaluate>[0]["questions"],
   });
 
-  const answers = result.answers as {
-    discard?: { choice?: string };
-    efficiency?: { score?: number };
-    safety?: { score?: number };
-    wait?: { score?: number };
-  };
+  const answers = (result.answers || {}) as Record<string, unknown>;
+  const resolved =
+    resolveDiscardChoice(extractDiscardAnswer(answers), hand) ||
+    hand[hand.length - 1];
 
-  const choice = answers.discard?.choice;
-  let discard: TileId =
-    choice && isTileId(choice) ? choice : unique[unique.length - 1];
-
-  // Fallback if model returns unexpected choice
-  if (!hand.includes(discard)) {
-    discard = hand[hand.length - 1];
-  }
+  // Final guard: must be in hand
+  const discard: TileId = hand.includes(resolved)
+    ? resolved
+    : hand[hand.length - 1];
 
   const scores: Scores = {
-    efficiency: normalizeScore(answers.efficiency?.score ?? 2),
-    safety: normalizeScore(answers.safety?.score ?? 2),
-    wait: normalizeScore(answers.wait?.score ?? 2),
+    efficiency: normalizeScore(extractScore(answers, "efficiency")),
+    safety: normalizeScore(extractScore(answers, "safety")),
+    wait: normalizeScore(extractScore(answers, "wait")),
   };
 
   return {

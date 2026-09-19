@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
       if (typeof t === "string" && isTileId(t)) river.push(t);
     }
 
-    const result = await evaluateDiscard(hand, difficulty, river);
+    const mode = body.mode === "vs-cpu" ? "vs-cpu" : "solo";
+    const result = await evaluateDiscard(hand, difficulty, river, mode);
 
     return NextResponse.json({
       discard: result.discard,
