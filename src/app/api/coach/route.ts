@@ -3,6 +3,8 @@ import { evaluateDiscard } from "@/lib/coach";
 import { isTileId, type TileId } from "@/lib/tiles";
 import type { Difficulty } from "@/lib/lessons";
 
+export const preferredRegion = 'hnd1';
+
 const DIFFS: Difficulty[] = ["beginner", "intermediate", "advanced"];
 
 export async function POST(req: NextRequest) {

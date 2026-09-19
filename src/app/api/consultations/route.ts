@@ -3,6 +3,8 @@ import { getDb, isTursoConfigured } from "@/lib/db";
 import { PLAYER_COOKIE } from "@/lib/player";
 import { isTileId } from "@/lib/tiles";
 
+export const preferredRegion = 'hnd1';
+
 export async function GET(req: NextRequest) {
   if (!isTursoConfigured()) {
     return NextResponse.json({ error: "Turso not configured", items: [] }, { status: 503 });

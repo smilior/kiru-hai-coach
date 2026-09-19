@@ -7,6 +7,8 @@ import {
 } from "@/lib/lessons";
 import { newPlayerId, PLAYER_COOKIE } from "@/lib/player";
 
+export const preferredRegion = 'hnd1';
+
 const LESSON_IDS: LessonId[] = ["beginner", "intermediate", "advanced"];
 
 function parseLessonId(v: unknown): LessonId | null {
