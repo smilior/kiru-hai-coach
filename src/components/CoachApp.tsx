@@ -22,6 +22,18 @@ import type { Scores } from "@/lib/explanation";
 
 const PLAYER_KEY = "khc_player_id";
 
+/** Highlight exactly one tile instance matching Jev discard (prefer tsumo). */
+function recommendIndices(
+  closed: TileId[],
+  tsumo: TileId | undefined,
+  discard: TileId | null | undefined
+): { closedIdx: number; tsumo: boolean } {
+  if (!discard) return { closedIdx: -1, tsumo: false };
+  if (tsumo && tsumo === discard) return { closedIdx: -1, tsumo: true };
+  return { closedIdx: closed.findIndex((t) => t === discard), tsumo: false };
+}
+
+
 type CoachResponse = {
   discard: TileId;
   scores: Scores;
@@ -216,6 +228,7 @@ export function CoachApp({ embedded = false }: CoachAppProps) {
 
   const closed = hand.slice(0, 13);
   const tsumo = hand[13];
+  const rec = recommendIndices(closed, tsumo, result?.discard);
 
   const lessonBody = (
         <>
@@ -263,8 +276,8 @@ export function CoachApp({ embedded = false }: CoachAppProps) {
                   tile={t}
                   size="md"
                   selected={selected === t && !result}
-                  recommended={result?.discard === t}
-                  dimmed={Boolean(result && result.discard !== t)}
+                  recommended={rec.closedIdx === i}
+                  dimmed={Boolean(result && rec.closedIdx !== i)}
                   onClick={() => setSelected(t)}
                 />
               ))}
@@ -277,8 +290,8 @@ export function CoachApp({ embedded = false }: CoachAppProps) {
                   tile={tsumo}
                   size="lg"
                   selected={selected === tsumo && !result}
-                  recommended={result?.discard === tsumo}
-                  dimmed={Boolean(result && result.discard !== tsumo)}
+                  recommended={rec.tsumo}
+                  dimmed={Boolean(result && !rec.tsumo)}
                   onClick={() => setSelected(tsumo)}
                 />
               </div>
