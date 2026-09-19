@@ -63,11 +63,25 @@ body {
 }
 .practice-river-block--side-left {
   flex-direction: row-reverse; /* col0 nearest center */
-  gap: 3px;
+  gap: 0; /* 上家: 牌同士を密着 */
 }
 .practice-river-block--side-right {
   flex-direction: row; /* col0 nearest center */
-  gap: 3px;
+  gap: 0; /* 下家: 牌同士を密着 */
+}
+.practice-river-block--side-left .practice-river-col,
+.practice-river-block--side-right .practice-river-col {
+  gap: 0;
+}
+.practice-river-block--side-left .tile-rot-box,
+.practice-river-block--side-right .tile-rot-box {
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+}
+.practice-river-block--side-left .tile-rot-face,
+.practice-river-block--side-right .tile-rot-face {
+  box-shadow: none; /* shadow looked like inter-tile gap */
 }
 .practice-river-row {
   display: flex;
