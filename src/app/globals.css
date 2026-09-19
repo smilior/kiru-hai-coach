@@ -73,11 +73,20 @@ body {
 .practice-river-block--side-right .practice-river-col {
   gap: 0;
 }
+/* Rotated faces are 16×22 laid out in a 22×16 box; overflow:visible made
+   flex min-height expand to the upright 22px → large visual gaps. Clip +
+   zero auto-min so layout height matches the sideways face. */
+.practice-river-block--side-left .practice-river-col > *,
+.practice-river-block--side-right .practice-river-col > * {
+  min-height: 0;
+  line-height: 0;
+}
 .practice-river-block--side-left .tile-rot-box,
 .practice-river-block--side-right .tile-rot-box {
   margin: 0;
   padding: 0;
   line-height: 0;
+  overflow: hidden;
 }
 .practice-river-block--side-left .tile-rot-face,
 .practice-river-block--side-right .tile-rot-face {
