@@ -50,6 +50,10 @@ body {
 .practice-river-block {
   display: flex;
   gap: 2px;
+  overflow: visible;
+  border: none;
+  background: transparent;
+  padding: 0;
 }
 .practice-river-block--stack {
   flex-direction: column;
@@ -90,4 +94,56 @@ body {
 }
 .practice-river-col--btt {
   flex-direction: column-reverse; /* shimocha: seat L→R ⇒ screen bottom→top */
+}
+
+
+/* Fixed center table: rivers grow without shifting the kyoku/dora box */
+.practice-table-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  align-items: center;
+  justify-items: center;
+  column-gap: 4px;
+  row-gap: 2px;
+  width: 100%;
+  max-width: 56rem;
+  margin-inline: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: visible;
+}
+.practice-table-top {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  justify-self: center;
+  overflow: visible;
+}
+.practice-table-left {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: end;
+  align-self: center;
+  overflow: visible;
+}
+.practice-table-center {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: center;
+  align-self: center;
+}
+.practice-table-right {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: start;
+  align-self: center;
+  overflow: visible;
+}
+.practice-table-bottom {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: start;
+  justify-self: center;
+  overflow: visible;
 }

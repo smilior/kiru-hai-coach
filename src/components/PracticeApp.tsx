@@ -89,123 +89,91 @@ function chunkRiver(tiles: TileId[]): TileId[][] {
 }
 
 /**
- * Discard rivers — Tenhou / 電脳麻将 convention:
- * Each seat discards L→R from THAT seat's viewpoint while facing the center
- * (「中央の左から」). 6 tiles per row; first row nearest the center; neat gaps.
- *
- * Screen mapping (viewer = bottom / self):
- * - Bottom (self): L→R on screen; first tile LEFT; rows grow toward hand (down).
- * - Top (toimen): their L→R ⇒ screen R→L; first tile RIGHT; row0 nearest center.
- * - Left (kamicha): facing center (rightward); their L→R ⇒ screen top→bottom;
- *   col0 nearest center; within a column tile0 at TOP.
- * - Right (shimocha): facing center (leftward); their L→R ⇒ screen bottom→top;
- *   col0 nearest center; within a column tile0 at BOTTOM.
+ * Discard rivers — design lock:
+ * rotate: 下家90 / 対面180 / 上家-90 / 自家0
+ * growth: 自家 L→R / 下家 bottom→top / 対面 R→L / 上家 top→bottom
+ * no border frame; stick to fixed center; show all discards (no 3-tile clip)
  */
 function RiverHorizontal({
   tiles,
   last,
-  caption,
   seat,
 }: {
   tiles: TileId[];
   last?: TileId | null;
-  caption?: string;
-  /** bottom = self (normal); top = toimen (mirrored on screen). */
   seat: "bottom" | "top";
 }) {
   const rows = chunkRiver(tiles);
   const mirror = seat === "top";
+  const rotate = seat === "top" ? 180 : 0;
   return (
-    <div className="flex max-w-full flex-col items-center gap-0.5 overflow-x-auto">
-      {caption && (
-        <span className="text-[9px] font-semibold tracking-wide text-white/70">
-          {caption}
-        </span>
-      )}
-      <div
-        className={[
-          "practice-river-block min-h-[32px] rounded border border-white/25 bg-black/35 px-1 py-1",
-          mirror
-            ? "practice-river-block--stack-from-center"
-            : "practice-river-block--stack",
-        ].join(" ")}
-      >
-        {rows.map((row, ri) => (
-          <div
-            key={ri}
-            className={[
-              "practice-river-row",
-              mirror ? "practice-river-row--rtl" : "practice-river-row--ltr",
-            ].join(" ")}
-          >
-            {row.length === 0 ? (
-              <span className="px-2 text-[9px] leading-[28px] text-white/30">
-                —
-              </span>
-            ) : (
-              row.map((t, i) => {
-                const globalIdx = ri * RIVER_ROW + i;
-                const isLast = Boolean(
-                  last && last === t && globalIdx === tiles.length - 1
-                );
-                return (
-                  <TileButton
-                    key={`${t}-${globalIdx}`}
-                    tile={t}
-                    size="river"
-                    faceOnly
-                    highlighted={isLast}
-                  />
-                );
-              })
-            )}
-          </div>
-        ))}
-      </div>
+    <div
+      className={[
+        "practice-river-block",
+        mirror
+          ? "practice-river-block--stack-from-center"
+          : "practice-river-block--stack",
+      ].join(" ")}
+    >
+      {rows.map((row, ri) => (
+        <div
+          key={ri}
+          className={[
+            "practice-river-row",
+            mirror ? "practice-river-row--rtl" : "practice-river-row--ltr",
+          ].join(" ")}
+        >
+          {row.map((t, i) => {
+            const globalIdx = ri * RIVER_ROW + i;
+            const isLast = Boolean(
+              last && last === t && globalIdx === tiles.length - 1
+            );
+            return (
+              <TileButton
+                key={`${t}-${globalIdx}`}
+                tile={t}
+                size="river"
+                faceOnly
+                rotate={rotate}
+                highlighted={isLast}
+              />
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
 
 /**
- * Side river (上家 / 下家): each 6-tile Tenhou row is a column (no rotate clip).
- * See RiverHorizontal header for per-seat L→R orientation.
+ * Side river (上家 / 下家): 6-tile Tenhou rows as columns; tiles rotated.
  */
 function RiverSide({
   tiles,
   last,
   side,
-  caption,
 }: {
   tiles: TileId[];
   last?: TileId | null;
   side: "left" | "right";
-  caption?: string;
 }) {
   const rows = chunkRiver(tiles);
   const empty = rows.every((r) => r.length === 0);
-  // kamicha (left): seat L→R ⇒ screen top→bottom
-  // shimocha (right): seat L→R ⇒ screen bottom→top
   const colClass =
     side === "left" ? "practice-river-col--ttb" : "practice-river-col--btt";
+  const rotate = side === "left" ? -90 : 90;
   return (
-    <div className="flex max-h-full flex-col items-center gap-0.5">
-      {caption && (
-        <span className="text-[9px] font-semibold tracking-wide text-white/70">
-          {caption}
-        </span>
-      )}
-      <div
-        className={[
-          "practice-river-block max-h-full min-h-[64px] items-stretch overflow-y-auto rounded border border-white/25 bg-black/35 px-1 py-1",
-          side === "left"
-            ? "practice-river-block--side-left"
-            : "practice-river-block--side-right",
-        ].join(" ")}
-      >
-        {empty ? (
-          <span className="px-1 py-4 text-[9px] text-white/30">—</span>
-        ) : (
-          rows.map((row, ri) => (
+    <div
+      className={[
+        "practice-river-block",
+        side === "left"
+          ? "practice-river-block--side-left"
+          : "practice-river-block--side-right",
+      ].join(" ")}
+    >
+      {empty
+        ? null
+        : rows.map((row, ri) => (
             <div
               key={ri}
               className={["practice-river-col", colClass].join(" ")}
@@ -221,14 +189,13 @@ function RiverSide({
                     tile={t}
                     size="river"
                     faceOnly
+                    rotate={rotate}
                     highlighted={isLast}
                   />
                 );
               })}
             </div>
-          ))
-        )}
-      </div>
+          ))}
     </div>
   );
 }
@@ -710,27 +677,23 @@ export function PracticeApp({ onExit }: Props) {
           </div>
         )}
 
-        {/* Seat map: bottom=self, top=toimen, left=kamicha, right=shimocha */}
-        <div className="relative mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-stretch justify-center gap-1 py-1">
-          <div className="flex min-h-0 shrink justify-center overflow-visible px-6">
+        {/* Seat map: fixed center; rivers glued to it (no flex push on discard) */}
+        <div className="practice-table-grid">
+          <div className="practice-table-top">
             <RiverHorizontal
               tiles={match.seats[top].river}
               last={lastDisc?.seat === top ? lastDisc.tile : null}
-              caption={`${RELATIVE_LABEL[top]}河`}
               seat="top"
             />
           </div>
-
-          <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-2 sm:gap-3">
-            <div className="flex h-full min-w-[56px] max-w-[30%] flex-1 items-center justify-end overflow-visible sm:min-w-[72px]">
-              <RiverSide
-                tiles={match.seats[left].river}
-                last={lastDisc?.seat === left ? lastDisc.tile : null}
-                side="left"
-                caption={RELATIVE_LABEL[left]}
-              />
-            </div>
-
+          <div className="practice-table-left">
+            <RiverSide
+              tiles={match.seats[left].river}
+              last={lastDisc?.seat === left ? lastDisc.tile : null}
+              side="left"
+            />
+          </div>
+          <div className="practice-table-center">
             <CenterBox
               roundLabel={match.roundLabel}
               remaining={liveWallCount(match)}
@@ -738,22 +701,18 @@ export function PracticeApp({ onExit }: Props) {
               phase={match.phase}
               doraIndicator={match.doraIndicator}
             />
-
-            <div className="flex h-full min-w-[56px] max-w-[30%] flex-1 items-center justify-start overflow-visible sm:min-w-[72px]">
-              <RiverSide
-                tiles={match.seats[right].river}
-                last={lastDisc?.seat === right ? lastDisc.tile : null}
-                side="right"
-                caption={RELATIVE_LABEL[right]}
-              />
-            </div>
           </div>
-
-          <div className="flex min-h-0 shrink justify-center overflow-visible px-6">
+          <div className="practice-table-right">
+            <RiverSide
+              tiles={match.seats[right].river}
+              last={lastDisc?.seat === right ? lastDisc.tile : null}
+              side="right"
+            />
+          </div>
+          <div className="practice-table-bottom">
             <RiverHorizontal
               tiles={match.seats[bottom].river}
               last={lastDisc?.seat === bottom ? lastDisc.tile : null}
-              caption={`${RELATIVE_LABEL[bottom]}河`}
               seat="bottom"
             />
           </div>
