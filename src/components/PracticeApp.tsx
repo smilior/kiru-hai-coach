@@ -40,6 +40,28 @@ type Props = {
   onExit?: () => void;
 };
 
+/** null = not measured yet (SSR / first paint); treat as blocked until known. */
+function useIsPortrait(): boolean | null {
+  const [portrait, setPortrait] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const update = () => {
+      const mq = window.matchMedia("(orientation: portrait)");
+      setPortrait(mq.matches || window.innerHeight > window.innerWidth);
+    };
+    update();
+    const mq = window.matchMedia("(orientation: portrait)");
+    mq.addEventListener("change", update);
+    window.addEventListener("resize", update);
+    return () => {
+      mq.removeEventListener("change", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
+  return portrait;
+}
+
 function chunkRiver(tiles: TileId[]): TileId[][] {
   const rows: TileId[][] = [];
   for (let i = 0; i < tiles.length; i += RIVER_ROW) {
@@ -48,29 +70,19 @@ function chunkRiver(tiles: TileId[]): TileId[][] {
   return rows.length ? rows : [[]];
 }
 
-function RiverGrid({
+/** Horizontal river (対面 / 自分). Tiles stay upright and readable. */
+function RiverHorizontal({
   tiles,
   last,
-  rotate = 0,
 }: {
   tiles: TileId[];
   last?: TileId | null;
-  rotate?: 0 | 90 | 180 | 270;
 }) {
   const rows = chunkRiver(tiles);
-  const rot =
-    rotate === 90
-      ? "rotate-90"
-      : rotate === 180
-        ? "rotate-180"
-        : rotate === 270
-          ? "-rotate-90"
-          : "";
-
   return (
-    <div className={`flex flex-col items-center gap-0.5 ${rot}`}>
+    <div className="flex max-w-full flex-col items-center gap-px overflow-x-auto">
       {rows.map((row, ri) => (
-        <div key={ri} className="flex gap-px">
+        <div key={ri} className="flex flex-nowrap gap-px">
           {row.map((t, i) => {
             const globalIdx = ri * RIVER_ROW + i;
             const isLast = Boolean(
@@ -92,16 +104,63 @@ function RiverGrid({
   );
 }
 
+/**
+ * Side river (上家 / 下家): each discard "row" of 6 becomes a vertical column
+ * so the full 河 stays visible without CSS rotate clipping.
+ */
+function RiverSide({
+  tiles,
+  last,
+  side,
+}: {
+  tiles: TileId[];
+  last?: TileId | null;
+  side: "left" | "right";
+}) {
+  const rows = chunkRiver(tiles);
+  return (
+    <div
+      className={[
+        "flex max-h-full items-end gap-px overflow-y-auto",
+        side === "left" ? "flex-row-reverse" : "flex-row",
+      ].join(" ")}
+    >
+      {rows.map((row, ri) => (
+        <div key={ri} className="flex flex-col gap-px">
+          {row.map((t, i) => {
+            const globalIdx = ri * RIVER_ROW + i;
+            const isLast = Boolean(
+              last && last === t && globalIdx === tiles.length - 1
+            );
+            return (
+              <TileButton
+                key={`${t}-${globalIdx}`}
+                tile={t}
+                size="xs"
+                faceOnly
+                highlighted={isLast}
+              />
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Tenhou-style center: kyoku + remaining + dora (flat, glanceable). */
 function CenterBox({
   roundLabel,
   remaining,
   turn,
   phase,
+  doraIndicator,
 }: {
   roundLabel: string;
   remaining: number;
   turn: Seat;
   phase: MatchState["phase"];
+  doraIndicator: TileId;
 }) {
   const windClass = (seat: Seat) =>
     [
@@ -112,7 +171,7 @@ function CenterBox({
     ].join(" ");
 
   return (
-    <div className="relative flex h-[4.5rem] w-[4.5rem] shrink-0 flex-col items-center justify-center border border-amber-400/80 bg-emerald-950/40 text-center shadow-[inset_0_0_12px_rgba(0,0,0,0.35)] sm:h-20 sm:w-20">
+    <div className="relative flex h-[5.25rem] w-[5.75rem] shrink-0 flex-col items-center justify-center gap-0.5 border border-white/35 bg-black/45 px-1 py-1 text-center sm:h-24 sm:w-28">
       <span className={`${windClass(VIEW_SEATS.top)} top-0.5 left-1/2 -translate-x-1/2`}>
         {SEAT_LABEL[VIEW_SEATS.top]}
       </span>
@@ -131,6 +190,10 @@ function CenterBox({
       <span className="text-[10px] text-white/80 sm:text-xs">
         残り {remaining}
       </span>
+      <div className="mt-0.5 flex items-center gap-1">
+        <span className="text-[9px] font-medium text-white/75">ドラ</span>
+        <TileButton tile={doraIndicator} size="xs" faceOnly />
+      </div>
     </div>
   );
 }
@@ -161,7 +224,46 @@ function ScoreLabel({
   );
 }
 
+function PortraitGate({ onExit }: { onExit?: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-30 flex flex-col items-center justify-center gap-4 px-6 text-center"
+      style={{
+        background:
+          "radial-gradient(ellipse at center, #1a5c38 0%, #0f3d26 55%, #0a2e1c 100%)",
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="横向きにしてください"
+    >
+      <div
+        className="pointer-events-none absolute inset-0 border-[3px] border-[#2a1a14]"
+        aria-hidden
+      />
+      <p className="text-2xl" aria-hidden>
+        📱↻
+      </p>
+      <p className="text-lg font-bold text-white">
+        実戦練習は横向き専用です
+      </p>
+      <p className="max-w-sm text-sm leading-relaxed text-white/85">
+        端末を横向き（ランドスケープ）に回転してください。縦向きでは対局できません。
+      </p>
+      {onExit && (
+        <button
+          type="button"
+          onClick={onExit}
+          className="mt-2 min-h-[44px] rounded-lg border border-amber-400/70 px-5 py-2.5 text-sm font-medium text-white active:bg-white/10"
+        >
+          レッスンに戻る
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function PracticeApp({ onExit }: Props) {
+  const isPortrait = useIsPortrait();
   const [match, setMatch] = useState<MatchState>(() => createMatch());
   const [selected, setSelected] = useState<TileId | null>(null);
   const [coachLoading, setCoachLoading] = useState(false);
@@ -241,6 +343,8 @@ export function PracticeApp({ onExit }: Props) {
   }, []);
 
   useEffect(() => {
+    // Pause CPU / draws while portrait gate is up (or orientation unknown)
+    if (isPortrait !== false) return;
     if (match.phase !== "playing") return;
     if (humanCanRon) return;
 
@@ -283,6 +387,7 @@ export function PracticeApp({ onExit }: Props) {
       };
     }
   }, [
+    isPortrait,
     match.phase,
     match.turn,
     match.hasDrawn,
@@ -390,6 +495,20 @@ export function PracticeApp({ onExit }: Props) {
   const right = VIEW_SEATS.right;
   const bottom = VIEW_SEATS.bottom;
 
+  // Do not render the table until orientation is known; never play in portrait.
+  if (isPortrait === null) {
+    return (
+      <div
+        className="fixed inset-0 z-30 bg-[#0a2e1c]"
+        aria-busy="true"
+        aria-label="読み込み中"
+      />
+    );
+  }
+  if (isPortrait) {
+    return <PortraitGate onExit={onExit} />;
+  }
+
   return (
     <div
       className="fixed inset-0 z-30 flex flex-col overflow-hidden"
@@ -400,29 +519,26 @@ export function PracticeApp({ onExit }: Props) {
     >
       {/* Wood frame */}
       <div
-        className="pointer-events-none absolute inset-0 z-40 border-[5px] border-[#3e2723] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"
+        className="pointer-events-none absolute inset-0 z-40 border-[3px] border-[#2a1a14]"
         aria-hidden
       />
 
       {/* Table surface */}
       <div className="relative flex min-h-0 flex-1 flex-col px-2 pb-1 pt-2 sm:px-3 sm:pt-3">
         {/* Corner scores + dora */}
-        <div className="relative z-10 mb-1 flex items-start justify-between gap-2 px-1">
+        <div className="relative z-10 mb-1 flex shrink-0 items-start justify-between gap-2 px-1">
           <div className="space-y-0.5">
             <ScoreLabel seat={top} />
             <ScoreLabel seat={left} />
           </div>
           <div className="flex flex-col items-end gap-1">
             <ScoreLabel seat={right} className="text-right" />
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-medium text-white/90">ドラ</span>
-              <TileButton tile={match.doraIndicator} size="xs" faceOnly />
-            </div>
+            <ScoreLabel seat={bottom} highlight className="text-right" />
           </div>
         </div>
 
         {/* Side outlined buttons */}
-        <div className="absolute right-2 top-16 z-20 flex flex-col gap-2 sm:right-3 sm:top-20">
+        <div className="absolute right-2 top-14 z-20 flex flex-col gap-2 sm:right-3 sm:top-16">
           <button
             type="button"
             onClick={() => {
@@ -435,21 +551,21 @@ export function PracticeApp({ onExit }: Props) {
                 setShowRyuukyoku(true);
               }
             }}
-            className="rounded border border-amber-400/70 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 sm:text-xs"
+            className="min-h-[36px] rounded border border-amber-400/70 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 sm:text-xs"
           >
             流局を表示
           </button>
           <button
             type="button"
             onClick={() => setSettingsOpen((v) => !v)}
-            className="rounded border border-amber-400/70 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 sm:text-xs"
+            className="min-h-[36px] rounded border border-amber-400/70 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 sm:text-xs"
           >
             設定
           </button>
         </div>
 
         {settingsOpen && (
-          <div className="absolute right-2 top-36 z-30 w-40 rounded-lg border border-amber-400/50 bg-emerald-950/95 p-2 shadow-xl sm:right-3">
+          <div className="absolute right-2 top-32 z-30 w-40 rounded-lg border border-amber-400/50 bg-emerald-950/95 p-2 shadow-xl sm:right-3">
             <button
               type="button"
               onClick={restart}
@@ -479,24 +595,23 @@ export function PracticeApp({ onExit }: Props) {
           </div>
         )}
 
-        {/* Center table: rivers + box */}
-        <div className="relative mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col items-center justify-center py-1">
+        {/* Center table: rivers + box — flex so all 河 stay visible */}
+        <div className="relative mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-stretch justify-center gap-1 py-1">
           {/* Top river (西 対面) */}
-          <div className="mb-1 flex min-h-[32px] justify-center">
-            <RiverGrid
+          <div className="flex min-h-0 shrink justify-center overflow-visible px-8">
+            <RiverHorizontal
               tiles={match.seats[top].river}
               last={lastDisc?.seat === top ? lastDisc.tile : null}
-              rotate={180}
             />
           </div>
 
-          <div className="flex w-full items-center justify-center gap-1 sm:gap-2">
-            {/* Left river (北 上家) */}
-            <div className="flex w-[72px] justify-center sm:w-[88px]">
-              <RiverGrid
+          <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-2 sm:gap-3">
+            {/* Left river (北 上家) — full 河, upright */}
+            <div className="flex h-full min-w-[56px] max-w-[30%] flex-1 items-center justify-end overflow-visible sm:min-w-[72px]">
+              <RiverSide
                 tiles={match.seats[left].river}
                 last={lastDisc?.seat === left ? lastDisc.tile : null}
-                rotate={270}
+                side="left"
               />
             </div>
 
@@ -505,53 +620,52 @@ export function PracticeApp({ onExit }: Props) {
               remaining={match.wall.length}
               turn={match.turn}
               phase={match.phase}
+              doraIndicator={match.doraIndicator}
             />
 
             {/* Right river (南 下家) */}
-            <div className="flex w-[72px] justify-center sm:w-[88px]">
-              <RiverGrid
+            <div className="flex h-full min-w-[56px] max-w-[30%] flex-1 items-center justify-start overflow-visible sm:min-w-[72px]">
+              <RiverSide
                 tiles={match.seats[right].river}
                 last={lastDisc?.seat === right ? lastDisc.tile : null}
-                rotate={90}
+                side="right"
               />
             </div>
           </div>
 
           {/* Bottom river (東 あなた) */}
-          <div className="mt-1 flex min-h-[32px] justify-center">
-            <RiverGrid
+          <div className="flex min-h-0 shrink justify-center overflow-visible px-8">
+            <RiverHorizontal
               tiles={match.seats[bottom].river}
               last={lastDisc?.seat === bottom ? lastDisc.tile : null}
             />
           </div>
         </div>
 
-        {/* Human score + prompt */}
-        <div className="relative z-10 mt-auto px-1 pb-1">
+        {/* Human score + prompt + hand */}
+        <div className="relative z-10 mt-auto shrink-0 px-1 pb-1">
           <p
             className={[
-              "mb-1 text-center text-xs font-medium sm:text-sm",
+              "mb-0.5 text-center text-xs font-medium sm:text-sm",
               humanTurn ? "text-amber-200" : "text-white/85",
             ].join(" ")}
           >
             {promptText}
           </p>
-          <ScoreLabel seat={bottom} highlight className="mb-2 text-center" />
-
           {/* Ron overlay */}
           {humanCanRon && lastDisc && (
             <div className="mb-2 flex justify-center gap-2">
               <button
                 type="button"
                 onClick={() => setMatch((m) => declareRon(m, HUMAN_SEAT))}
-                className="rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow"
+                className="min-h-[44px] rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow"
               >
                 ロン
               </button>
               <button
                 type="button"
                 onClick={() => setRonPassKey(lastDiscardKey)}
-                className="rounded-lg border border-white/40 bg-black/30 px-5 py-2.5 text-sm font-medium text-white"
+                className="min-h-[44px] rounded-lg border border-white/40 bg-black/30 px-5 py-2.5 text-sm font-medium text-white"
               >
                 スルー
               </button>
@@ -571,14 +685,14 @@ export function PracticeApp({ onExit }: Props) {
                 <button
                   type="button"
                   onClick={restart}
-                  className="rounded-lg bg-[#c4a574] px-4 py-2 text-sm font-bold text-stone-900"
+                  className="min-h-[44px] rounded-lg bg-[#c4a574] px-4 py-2 text-sm font-bold text-stone-900"
                 >
                   もう一度
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowRyuukyoku(false)}
-                  className="rounded-lg border border-white/30 px-3 py-2 text-xs text-white"
+                  className="min-h-[44px] rounded-lg border border-white/30 px-3 py-2 text-xs text-white"
                 >
                   閉じる
                 </button>
@@ -586,7 +700,7 @@ export function PracticeApp({ onExit }: Props) {
             </div>
           )}
 
-          {/* Hand + 解説 */}
+          {/* Hand + 解説 — single non-wrapping row */}
           <div className="flex items-end gap-2">
             <div className="flex shrink-0 flex-col gap-1.5 pb-1">
               <button
@@ -601,7 +715,7 @@ export function PracticeApp({ onExit }: Props) {
                 <button
                   type="button"
                   onClick={() => setMatch((m) => declareTsumo(m))}
-                  className="rounded-lg bg-rose-600 px-2 py-1.5 text-xs font-bold text-white"
+                  className="min-h-[40px] rounded-lg bg-rose-600 px-2 py-1.5 text-xs font-bold text-white"
                 >
                   ツモ
                 </button>
@@ -610,7 +724,7 @@ export function PracticeApp({ onExit }: Props) {
                 <button
                   type="button"
                   onClick={() => humanDiscard(selected)}
-                  className="rounded-lg bg-stone-900/80 px-2 py-1.5 text-xs font-bold text-white"
+                  className="min-h-[40px] rounded-lg bg-stone-900/80 px-2 py-1.5 text-xs font-bold text-white"
                 >
                   切る
                 </button>
@@ -619,15 +733,15 @@ export function PracticeApp({ onExit }: Props) {
                 <button
                   type="button"
                   onClick={() => humanDiscard(drawn)}
-                  className="rounded-lg border border-white/40 px-2 py-1.5 text-[10px] font-semibold text-white"
+                  className="min-h-[36px] rounded-lg border border-white/40 px-2 py-1.5 text-[10px] font-semibold text-white"
                 >
                   ツモ切
                 </button>
               )}
             </div>
 
-            <div className="min-w-0 flex-1 overflow-x-auto pb-1">
-              <div className="flex justify-center gap-0.5 sm:gap-1">
+            <div className="practice-hand-scale min-w-0 flex-1 overflow-x-auto pb-0.5">
+              <div className="practice-hand-row">
                 {closed.map((t, i) => (
                   <TileButton
                     key={`${t}-${i}-h`}
@@ -641,7 +755,7 @@ export function PracticeApp({ onExit }: Props) {
                 ))}
                 {humanTurn && drawn && (
                   <>
-                    <span className="mx-0.5 w-px self-stretch bg-white/20" />
+                    <span className="mx-0.5 w-px shrink-0 self-stretch bg-white/20" />
                     <TileButton
                       tile={drawn}
                       size="hand"
@@ -663,30 +777,41 @@ export function PracticeApp({ onExit }: Props) {
               {error}
             </p>
           )}
+        </div>
 
-          {coach && (
-            <section className="mt-2 max-h-36 overflow-y-auto rounded-xl border border-amber-400/30 bg-emerald-950/95 p-3 text-white shadow-lg">
+        {/* Jev card: floating, closable, does not push/block the table hand */}
+        {coach && (
+          <section className="absolute bottom-20 left-2 right-2 z-50 mx-auto max-h-[40vh] max-w-lg overflow-y-auto rounded-xl border border-amber-400/40 bg-emerald-950/95 p-3 text-white shadow-2xl sm:bottom-24">
+            <div className="mb-1 flex items-start justify-between gap-2">
               <h2 className="text-xs font-semibold text-amber-200">
                 推奨: {TILE_NAME_JA[coach.discard]}（{coach.discard}）
               </h2>
-              <div className="mt-1 [&_*]:text-white">
-                <ScoreBars scores={coach.scores} difficulty="advanced" />
-              </div>
-              <p className="mt-1 text-xs leading-relaxed text-white/90">
-                {coach.explanation}
-              </p>
-              {humanTurn && (
-                <button
-                  type="button"
-                  onClick={() => humanDiscard(coach.discard)}
-                  className="mt-2 w-full rounded-lg bg-[#c4a574] py-2 text-xs font-bold text-stone-900"
-                >
-                  推奨牌を切る
-                </button>
-              )}
-            </section>
-          )}
-        </div>
+              <button
+                type="button"
+                onClick={() => setCoach(null)}
+                aria-label="解説を閉じる"
+                className="min-h-[36px] min-w-[36px] shrink-0 rounded-md border border-white/30 text-sm text-white/90 active:bg-white/10"
+              >
+                ×
+              </button>
+            </div>
+            <div className="mt-1 [&_*]:text-white">
+              <ScoreBars scores={coach.scores} difficulty="advanced" />
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-white/90">
+              {coach.explanation}
+            </p>
+            {humanTurn && (
+              <button
+                type="button"
+                onClick={() => humanDiscard(coach.discard)}
+                className="mt-2 min-h-[44px] w-full rounded-lg bg-[#c4a574] py-2 text-xs font-bold text-stone-900"
+              >
+                推奨牌を切る
+              </button>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

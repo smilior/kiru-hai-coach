@@ -16,3 +16,22 @@ body {
   color: var(--foreground);
   -webkit-tap-highlight-color: transparent;
 }
+
+/* 実戦: own hand stays one non-wrapping row (Tenhou-style bottom strip) */
+.practice-hand-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  width: max-content;
+  min-width: 100%;
+}
+
+.practice-hand-row > * {
+  flex: 0 0 auto;
+}
+
+.practice-hand-scale {
+  container-type: inline-size;
+}
