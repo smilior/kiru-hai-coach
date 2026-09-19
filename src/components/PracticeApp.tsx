@@ -88,7 +88,7 @@ function chunkRiver(tiles: TileId[]): TileId[][] {
   return rows.length ? rows : [[]];
 }
 
-/** Horizontal river (対面 / 自分). 6-tile rows; tiles upright. */
+/** Horizontal river (対面 / 自分). Tenhou: 6 tiles/row, even gaps, upright. */
 function RiverHorizontal({
   tiles,
   last,
@@ -106,11 +106,14 @@ function RiverHorizontal({
           {caption}
         </span>
       )}
-      <div className="min-h-[32px] rounded border border-white/10 bg-black/15 px-0.5 py-0.5">
+      <div className="practice-river-block min-h-[40px] rounded border border-white/15 bg-black/20 px-1 py-1">
         {rows.map((row, ri) => (
-          <div key={ri} className="flex flex-nowrap gap-px">
+          <div
+            key={ri}
+            className="practice-river-row flex flex-nowrap justify-start"
+          >
             {row.length === 0 ? (
-              <span className="px-2 text-[9px] leading-[30px] text-white/30">
+              <span className="px-2 text-[9px] leading-[36px] text-white/30">
                 —
               </span>
             ) : (
@@ -123,7 +126,7 @@ function RiverHorizontal({
                   <TileButton
                     key={`${t}-${globalIdx}`}
                     tile={t}
-                    size="xs"
+                    size="river"
                     faceOnly
                     highlighted={isLast}
                   />
@@ -138,8 +141,8 @@ function RiverHorizontal({
 }
 
 /**
- * Side river (上家 / 下家): each 6-tile row becomes a column so the full 河
- * stays visible (Tenhou-like clarity, no CSS rotate clipping).
+ * Side river (上家 / 下家): each 6-tile Tenhou row is a column (no rotate clip).
+ * Uniform gaps; columns separated so rows of 6 stay readable.
  */
 function RiverSide({
   tiles,
@@ -163,7 +166,7 @@ function RiverSide({
       )}
       <div
         className={[
-          "flex max-h-full min-h-[64px] items-end gap-px overflow-y-auto rounded border border-white/10 bg-black/15 px-0.5 py-0.5",
+          "practice-river-block flex max-h-full min-h-[72px] items-end overflow-y-auto rounded border border-white/15 bg-black/20 px-1 py-1",
           side === "left" ? "flex-row-reverse" : "flex-row",
         ].join(" ")}
       >
@@ -171,7 +174,7 @@ function RiverSide({
           <span className="px-1 py-4 text-[9px] text-white/30">—</span>
         ) : (
           rows.map((row, ri) => (
-            <div key={ri} className="flex flex-col gap-px">
+            <div key={ri} className="practice-river-col flex flex-col">
               {row.map((t, i) => {
                 const globalIdx = ri * RIVER_ROW + i;
                 const isLast = Boolean(
@@ -181,7 +184,7 @@ function RiverSide({
                   <TileButton
                     key={`${t}-${globalIdx}`}
                     tile={t}
-                    size="xs"
+                    size="river"
                     faceOnly
                     highlighted={isLast}
                   />

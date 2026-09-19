@@ -10,7 +10,7 @@ type Props = {
   dimmed?: boolean;
   highlighted?: boolean;
   onClick?: () => void;
-  size?: "xs" | "sm" | "md" | "lg" | "hand";
+  size?: "xs" | "river" | "sm" | "hand" | "md" | "lg";
   /** When true, render as non-interactive figure (rivers). */
   faceOnly?: boolean;
   /** Soft yellow glow for table selection (matches riichi UI). */
@@ -21,10 +21,13 @@ type Props = {
 
 const SIZE = {
   xs: { w: 22, h: 30 },
+  /** River / discard pond — readable but smaller than hand. */
+  river: { w: 26, h: 36 },
   sm: { w: 32, h: 44 },
+  /** Own hand — compact so the table stays glanceable. */
+  hand: { w: 30, h: 42 },
   md: { w: 48, h: 64 },
   lg: { w: 56, h: 76 },
-  hand: { w: 44, h: 60 },
 };
 
 export function TileButton({

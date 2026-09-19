@@ -23,7 +23,7 @@ body {
   flex-wrap: nowrap;
   align-items: flex-end;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
   width: max-content;
   min-width: 100%;
 }
@@ -34,4 +34,25 @@ body {
 
 .practice-hand-scale {
   container-type: inline-size;
+}
+
+/* 実戦: Tenhou-style river — 6-tile rows, even gaps between tiles & rows */
+.practice-river-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.practice-river-block.flex-row,
+.practice-river-block.flex-row-reverse {
+  flex-direction: row;
+  gap: 4px;
+}
+.practice-river-row {
+  gap: 2px;
+}
+.practice-river-row + .practice-river-row {
+  margin-top: 0;
+}
+.practice-river-col {
+  gap: 2px;
 }
