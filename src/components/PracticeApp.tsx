@@ -890,7 +890,7 @@ export function PracticeApp({ onExit }: Props) {
         {/* Jev 解説: narrow left dock under HUD — clears own river + hand (closable, non-modal) */}
         {coach && (
           <section
-            className="absolute left-2 top-14 z-50 flex w-[min(16.5rem,36vw)] max-h-[calc(100%-7.25rem)] flex-col overflow-hidden rounded-xl border border-white/30 bg-emerald-950/95 p-2.5 text-white shadow-2xl sm:left-3 sm:top-16 sm:w-[min(17.5rem,34vw)] sm:p-3"
+            className="absolute right-2 top-36 z-50 flex w-[min(16.5rem,36vw)] max-h-[calc(100%-9.5rem)] flex-col overflow-hidden rounded-xl border border-white/30 bg-emerald-950/95 p-2.5 text-white shadow-2xl sm:right-3 sm:top-40 sm:w-[min(17.5rem,34vw)] sm:p-3"
             role="complementary"
             aria-label="切牌解説"
           >
