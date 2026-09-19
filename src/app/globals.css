@@ -247,3 +247,21 @@ body {
 .tile-rot-180 .tile-rot-face {
   transform: rotate(180deg);
 }
+
+
+/* レッスンコーチ: 手牌は小さく横一列（折り返しなし） */
+.coach-hand-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  width: max-content;
+  min-width: 100%;
+}
+.coach-hand-row > * {
+  flex: 0 0 auto;
+}
+.coach-hand-scale {
+  container-type: inline-size;
+}

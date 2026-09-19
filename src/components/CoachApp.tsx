@@ -268,34 +268,38 @@ export function CoachApp({ embedded = false }: CoachAppProps) {
               </button>
             </div>
 
-            <p className="mb-2 text-xs text-stone-500">切る牌をタップ（任意）</p>
-            <div className="flex flex-wrap justify-center gap-1.5">
-              {closed.map((t, i) => (
-                <TileButton
-                  key={`${t}-${i}`}
-                  tile={t}
-                  size="md"
-                  selected={selected === t && !result}
-                  recommended={rec.closedIdx === i}
-                  dimmed={Boolean(result && rec.closedIdx !== i)}
-                  onClick={() => setSelected(t)}
-                />
-              ))}
-            </div>
-
-            {tsumo && (
-              <div className="mt-4 flex flex-col items-center gap-1">
-                <span className="text-xs font-medium text-stone-500">ツモ</span>
-                <TileButton
-                  tile={tsumo}
-                  size="lg"
-                  selected={selected === tsumo && !result}
-                  recommended={rec.tsumo}
-                  dimmed={Boolean(result && !rec.tsumo)}
-                  onClick={() => setSelected(tsumo)}
-                />
+            <p className="mb-2 text-xs text-stone-500">切る牌をタップ（任意）・横一列</p>
+            <div className="coach-hand-scale overflow-x-auto pb-0.5">
+              <div className="coach-hand-row">
+                {closed.map((t, i) => (
+                  <TileButton
+                    key={`${t}-${i}`}
+                    tile={t}
+                    size="hand"
+                    selected={selected === t && !result}
+                    recommended={rec.closedIdx === i}
+                    dimmed={Boolean(result && rec.closedIdx !== i)}
+                    onClick={() => setSelected(t)}
+                  />
+                ))}
+                {tsumo && (
+                  <>
+                    <span
+                      className="mx-0.5 w-px shrink-0 self-stretch bg-stone-300"
+                      aria-hidden
+                    />
+                    <TileButton
+                      tile={tsumo}
+                      size="hand"
+                      selected={selected === tsumo && !result}
+                      recommended={rec.tsumo}
+                      dimmed={Boolean(result && !rec.tsumo)}
+                      onClick={() => setSelected(tsumo)}
+                    />
+                  </>
+                )}
               </div>
-            )}
+            </div>
           </section>
 
           <div className="flex gap-2">
