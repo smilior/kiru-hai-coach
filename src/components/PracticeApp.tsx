@@ -887,12 +887,14 @@ export function PracticeApp({ onExit }: Props) {
           )}
         </div>
 
+        {/* Jev 解説: narrow left dock under HUD — clears own river + hand (closable, non-modal) */}
         {coach && (
           <section
-            className="absolute left-2 top-14 z-50 max-h-[min(42vh,20rem)] w-[min(22rem,calc(100%-5.5rem))] overflow-y-auto rounded-xl border border-white/30 bg-emerald-950/95 p-3 text-white shadow-2xl sm:left-3 sm:top-16"
+            className="absolute left-2 top-14 z-50 flex w-[min(16.5rem,36vw)] max-h-[calc(100%-7.25rem)] flex-col overflow-hidden rounded-xl border border-white/30 bg-emerald-950/95 p-2.5 text-white shadow-2xl sm:left-3 sm:top-16 sm:w-[min(17.5rem,34vw)] sm:p-3"
+            role="complementary"
             aria-label="切牌解説"
           >
-            <div className="mb-1 flex items-start justify-between gap-2">
+            <div className="mb-1 flex shrink-0 items-start justify-between gap-2">
               <h2 className="text-xs font-semibold text-amber-200">
                 推奨: {TILE_NAME_JA[coach.discard]}（{coach.discard}）
               </h2>
@@ -905,17 +907,19 @@ export function PracticeApp({ onExit }: Props) {
                 ×
               </button>
             </div>
-            <div className="mt-1">
-              <ScoreBars scores={coach.scores} difficulty="advanced" variant="onDark" />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="mt-0.5">
+                <ScoreBars scores={coach.scores} difficulty="advanced" variant="onDark" />
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-white/90">
+                {coach.explanation}
+              </p>
             </div>
-            <p className="mt-1 text-xs leading-relaxed text-white/90">
-              {coach.explanation}
-            </p>
             {humanTurn && (
               <button
                 type="button"
                 onClick={() => humanDiscard(coach.discard)}
-                className="mt-2 min-h-[44px] w-full rounded-lg bg-[#c4a574] py-2 text-xs font-bold text-stone-900"
+                className="mt-2 min-h-[44px] w-full shrink-0 rounded-lg bg-[#c4a574] py-2 text-xs font-bold text-stone-900"
               >
                 推奨牌を切る
               </button>
