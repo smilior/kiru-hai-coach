@@ -36,29 +36,37 @@ body {
   container-type: inline-size;
 }
 
-/* 実戦: Tenhou-style river — 6-tile rows, even gaps between tiles & rows */
+/*
+ * 実戦 rivers (Tenhou): 6-tile rows, even gaps.
+ * Flex direction is set in JSX per seat — do NOT hardcode row/column here
+ * or it will fight flex-row-reverse / flex-col-reverse (kamicha / toimen).
+ */
 .practice-river-block {
   display: flex;
+  gap: 2px;
+}
+.practice-river-block:not(.flex-row):not(.flex-row-reverse) {
   flex-direction: column;
+}
+.practice-river-block--from-center-up:not(.flex-row):not(.flex-row-reverse) {
+  flex-direction: column-reverse;
+}
+.practice-river-block.flex-row {
+  flex-direction: row;
   gap: 3px;
 }
-.practice-river-block.flex-row,
 .practice-river-block.flex-row-reverse {
-  flex-direction: row;
-  gap: 4px;
+  flex-direction: row-reverse;
+  gap: 3px;
 }
 .practice-river-row {
   display: flex;
   flex-wrap: nowrap;
   align-items: flex-start;
-  gap: 2px;
-}
-.practice-river-row + .practice-river-row {
-  margin-top: 0;
+  gap: 1px;
 }
 .practice-river-col {
   display: flex;
-  flex-direction: column;
   align-items: stretch;
-  gap: 2px;
+  gap: 1px;
 }

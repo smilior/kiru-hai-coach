@@ -88,17 +88,35 @@ function chunkRiver(tiles: TileId[]): TileId[][] {
   return rows.length ? rows : [[]];
 }
 
-/** Horizontal river (対面 / 自分). Tenhou: 6 tiles/row, even gaps, upright. */
+/**
+ * Discard rivers — Tenhou / 電脳麻将 convention:
+ * Each seat discards L→R from THAT seat's viewpoint while facing the center
+ * (「中央の左から」). 6 tiles per row; first row nearest the center; neat gaps.
+ *
+ * Screen mapping (viewer = bottom / self):
+ * - Bottom (self): L→R on screen; first tile LEFT; rows grow toward hand (down).
+ * - Top (toimen): their L→R ⇒ screen R→L; first tile RIGHT; row0 nearest center
+ *   (flex-col-reverse so the first row sits at the bottom of the block).
+ * - Left (kamicha): facing center (rightward); their L→R ⇒ screen bottom→top.
+ *   Each Tenhou row = one upright column; col0 nearest center (flex-row-reverse);
+ *   within a column tile0 at BOTTOM (flex-col-reverse).
+ * - Right (shimocha): mirror of left; their L→R ⇒ screen top→bottom;
+ *   col0 nearest center (flex-row); within a column tile0 at TOP (flex-col).
+ */
 function RiverHorizontal({
   tiles,
   last,
   caption,
+  seat,
 }: {
   tiles: TileId[];
   last?: TileId | null;
   caption?: string;
+  /** bottom = self (normal); top = toimen (mirrored on screen). */
+  seat: "bottom" | "top";
 }) {
   const rows = chunkRiver(tiles);
+  const mirror = seat === "top";
   return (
     <div className="flex max-w-full flex-col items-center gap-0.5 overflow-x-auto">
       {caption && (
@@ -106,14 +124,22 @@ function RiverHorizontal({
           {caption}
         </span>
       )}
-      <div className="practice-river-block min-h-[40px] rounded border border-white/25 bg-black/35 px-1 py-1">
+      <div
+        className={[
+          "practice-river-block min-h-[32px] rounded border border-white/25 bg-black/35 px-1 py-1",
+          mirror ? "practice-river-block--from-center-up" : "",
+        ].join(" ")}
+      >
         {rows.map((row, ri) => (
           <div
             key={ri}
-            className="practice-river-row flex flex-nowrap justify-start"
+            className={[
+              "practice-river-row flex flex-nowrap",
+              mirror ? "flex-row-reverse" : "justify-start",
+            ].join(" ")}
           >
             {row.length === 0 ? (
-              <span className="px-2 text-[9px] leading-[36px] text-white/30">
+              <span className="px-2 text-[9px] leading-[28px] text-white/30">
                 —
               </span>
             ) : (
@@ -142,7 +168,7 @@ function RiverHorizontal({
 
 /**
  * Side river (上家 / 下家): each 6-tile Tenhou row is a column (no rotate clip).
- * Uniform gaps; columns separated so rows of 6 stay readable.
+ * See RiverHorizontal header for per-seat L→R orientation.
  */
 function RiverSide({
   tiles,
@@ -157,6 +183,8 @@ function RiverSide({
 }) {
   const rows = chunkRiver(tiles);
   const empty = rows.every((r) => r.length === 0);
+  // kamicha (left): within-column grows bottom→top; shimocha (right): top→bottom
+  const colDir = side === "left" ? "flex-col-reverse" : "flex-col";
   return (
     <div className="flex max-h-full flex-col items-center gap-0.5">
       {caption && (
@@ -166,7 +194,8 @@ function RiverSide({
       )}
       <div
         className={[
-          "practice-river-block flex max-h-full min-h-[72px] items-start overflow-y-auto rounded border border-white/25 bg-black/35 px-1 py-1",
+          "practice-river-block flex max-h-full min-h-[64px] items-stretch overflow-y-auto rounded border border-white/25 bg-black/35 px-1 py-1",
+          // First Tenhou row (column) nearest center: left uses reverse, right normal
           side === "left" ? "flex-row-reverse" : "flex-row",
         ].join(" ")}
       >
@@ -174,7 +203,10 @@ function RiverSide({
           <span className="px-1 py-4 text-[9px] text-white/30">—</span>
         ) : (
           rows.map((row, ri) => (
-            <div key={ri} className="practice-river-col flex flex-col">
+            <div
+              key={ri}
+              className={["practice-river-col flex", colDir].join(" ")}
+            >
               {row.map((t, i) => {
                 const globalIdx = ri * RIVER_ROW + i;
                 const isLast = Boolean(
@@ -682,6 +714,7 @@ export function PracticeApp({ onExit }: Props) {
               tiles={match.seats[top].river}
               last={lastDisc?.seat === top ? lastDisc.tile : null}
               caption={`${RELATIVE_LABEL[top]}河`}
+              seat="top"
             />
           </div>
 
@@ -718,6 +751,7 @@ export function PracticeApp({ onExit }: Props) {
               tiles={match.seats[bottom].river}
               last={lastDisc?.seat === bottom ? lastDisc.tile : null}
               caption={`${RELATIVE_LABEL[bottom]}河`}
+              seat="bottom"
             />
           </div>
         </div>
