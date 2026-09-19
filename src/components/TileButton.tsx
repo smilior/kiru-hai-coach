@@ -25,7 +25,7 @@ const SIZE = {
   river: { w: 26, h: 36 },
   sm: { w: 32, h: 44 },
   /** Own hand — compact so the table stays glanceable. */
-  hand: { w: 30, h: 42 },
+  hand: { w: 28, h: 40 },
   md: { w: 48, h: 64 },
   lg: { w: 56, h: 76 },
 };
@@ -59,9 +59,14 @@ export function TileButton({
   ].join(" ");
 
   // Suit PNGs are transparent; white face makes tiles readable on felt.
+  // River faces get a slightly stronger edge so ponds stay glanceable.
+  const faceRing =
+    size === "river"
+      ? "bg-white shadow-md ring-1 ring-stone-500/70"
+      : "bg-white shadow-sm ring-1 ring-stone-300/80";
   const img = (
     <span
-      className="relative block overflow-hidden rounded-sm bg-white shadow-sm ring-1 ring-stone-300/80"
+      className={`relative block overflow-hidden rounded-sm ${faceRing}`}
       style={{ width: w, height: h }}
     >
       <Image

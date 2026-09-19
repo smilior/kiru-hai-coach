@@ -106,7 +106,7 @@ function RiverHorizontal({
           {caption}
         </span>
       )}
-      <div className="practice-river-block min-h-[40px] rounded border border-white/15 bg-black/20 px-1 py-1">
+      <div className="practice-river-block min-h-[40px] rounded border border-white/25 bg-black/35 px-1 py-1">
         {rows.map((row, ri) => (
           <div
             key={ri}
@@ -166,7 +166,7 @@ function RiverSide({
       )}
       <div
         className={[
-          "practice-river-block flex max-h-full min-h-[72px] items-end overflow-y-auto rounded border border-white/15 bg-black/20 px-1 py-1",
+          "practice-river-block flex max-h-full min-h-[72px] items-start overflow-y-auto rounded border border-white/25 bg-black/35 px-1 py-1",
           side === "left" ? "flex-row-reverse" : "flex-row",
         ].join(" ")}
       >
