@@ -37,26 +37,32 @@ body {
 }
 
 /*
- * 実戦 rivers (Tenhou): 6-tile rows, even gaps.
- * Flex direction is set in JSX per seat — do NOT hardcode row/column here
- * or it will fight flex-row-reverse / flex-col-reverse (kamicha / toimen).
+ * 実戦 rivers (Tenhou / 電脳麻将):
+ * Each seat discards L→R from THAT seat's viewpoint facing center.
+ * 6 tiles per row/col; first row nearest center; even gaps.
+ * Orientation classes below are authoritative (do not rely on Tailwind
+ * flex-*-reverse — flex-col-reverse was missing from prod CSS).
+ *
+ * Screen growth (viewer = bottom / self):
+ *   bottom: L→R; top (toimen): R→L (first tile RIGHT);
+ *   left (kamicha): top→bottom; right (shimocha): bottom→top.
  */
 .practice-river-block {
   display: flex;
   gap: 2px;
 }
-.practice-river-block:not(.flex-row):not(.flex-row-reverse) {
+.practice-river-block--stack {
   flex-direction: column;
 }
-.practice-river-block--from-center-up:not(.flex-row):not(.flex-row-reverse) {
+.practice-river-block--stack-from-center {
   flex-direction: column-reverse;
 }
-.practice-river-block.flex-row {
-  flex-direction: row;
+.practice-river-block--side-left {
+  flex-direction: row-reverse; /* col0 nearest center */
   gap: 3px;
 }
-.practice-river-block.flex-row-reverse {
-  flex-direction: row-reverse;
+.practice-river-block--side-right {
+  flex-direction: row; /* col0 nearest center */
   gap: 3px;
 }
 .practice-river-row {
@@ -65,8 +71,23 @@ body {
   align-items: flex-start;
   gap: 1px;
 }
+.practice-river-row--ltr {
+  flex-direction: row;
+  justify-content: flex-start;
+}
+.practice-river-row--rtl {
+  /* toimen: seat L→R ⇒ screen R→L; pack from RIGHT so incomplete rows hang right */
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
 .practice-river-col {
   display: flex;
   align-items: stretch;
   gap: 1px;
+}
+.practice-river-col--ttb {
+  flex-direction: column; /* kamicha: seat L→R ⇒ screen top→bottom */
+}
+.practice-river-col--btt {
+  flex-direction: column-reverse; /* shimocha: seat L→R ⇒ screen bottom→top */
 }

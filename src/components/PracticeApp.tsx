@@ -95,12 +95,11 @@ function chunkRiver(tiles: TileId[]): TileId[][] {
  *
  * Screen mapping (viewer = bottom / self):
  * - Bottom (self): L→R on screen; first tile LEFT; rows grow toward hand (down).
- * - Top (toimen): their L→R ⇒ screen R→L; first tile RIGHT; row0 nearest center
- *   (flex-col-reverse so the first row sits at the bottom of the block).
- * - Left (kamicha): screen top→bottom; col0 nearest center; tile0 at TOP.
- * - Design lock: 自家 L→R / 下家 bottom→top / 対面 R→L / 上家 top→bottom.
- * - Right (shimocha): their L→R ⇒ screen bottom→top;
- *   col0 nearest center (flex-row); within a column tile0 at BOTTOM (flex-col-reverse).
+ * - Top (toimen): their L→R ⇒ screen R→L; first tile RIGHT; row0 nearest center.
+ * - Left (kamicha): facing center (rightward); their L→R ⇒ screen top→bottom;
+ *   col0 nearest center; within a column tile0 at TOP.
+ * - Right (shimocha): facing center (leftward); their L→R ⇒ screen bottom→top;
+ *   col0 nearest center; within a column tile0 at BOTTOM.
  */
 function RiverHorizontal({
   tiles,
@@ -126,19 +125,18 @@ function RiverHorizontal({
       <div
         className={[
           "practice-river-block min-h-[32px] rounded border border-white/25 bg-black/35 px-1 py-1",
-          mirror ? "practice-river-block--from-center-up" : "",
+          mirror
+            ? "practice-river-block--stack-from-center"
+            : "practice-river-block--stack",
         ].join(" ")}
-        style={{ flexDirection: mirror ? "column-reverse" : "column" }}
       >
         {rows.map((row, ri) => (
           <div
             key={ri}
-            className="practice-river-row flex flex-nowrap"
-            /* inline: Tailwind class was not reliably reversing 対面 on prod */
-            style={{
-              flexDirection: mirror ? "row-reverse" : "row",
-              justifyContent: mirror ? "flex-end" : "flex-start",
-            }}
+            className={[
+              "practice-river-row",
+              mirror ? "practice-river-row--rtl" : "practice-river-row--ltr",
+            ].join(" ")}
           >
             {row.length === 0 ? (
               <span className="px-2 text-[9px] leading-[28px] text-white/30">
@@ -185,13 +183,10 @@ function RiverSide({
 }) {
   const rows = chunkRiver(tiles);
   const empty = rows.every((r) => r.length === 0);
-  // kamicha (left): their L→R ⇒ screen top→bottom (flex-col) — QA PASS
-  // shimocha (right): their L→R ⇒ screen bottom→top (flex-col-reverse) — was wrong as top→bottom
-  // Screen coords (design): 上家 上→下, 下家 下→上
-  const colDirStyle =
-    side === "left"
-      ? ({ flexDirection: "column" } as const) // 上家: top→bottom
-      : ({ flexDirection: "column-reverse" } as const); // 下家: bottom→top
+  // kamicha (left): seat L→R ⇒ screen top→bottom
+  // shimocha (right): seat L→R ⇒ screen bottom→top
+  const colClass =
+    side === "left" ? "practice-river-col--ttb" : "practice-river-col--btt";
   return (
     <div className="flex max-h-full flex-col items-center gap-0.5">
       {caption && (
@@ -201,13 +196,11 @@ function RiverSide({
       )}
       <div
         className={[
-          "practice-river-block flex max-h-full min-h-[64px] items-stretch overflow-y-auto rounded border border-white/25 bg-black/35 px-1 py-1",
-          // First Tenhou row (column) nearest center
-          side === "left" ? "flex-row-reverse" : "flex-row",
+          "practice-river-block max-h-full min-h-[64px] items-stretch overflow-y-auto rounded border border-white/25 bg-black/35 px-1 py-1",
+          side === "left"
+            ? "practice-river-block--side-left"
+            : "practice-river-block--side-right",
         ].join(" ")}
-        style={{
-          flexDirection: side === "left" ? "row-reverse" : "row",
-        }}
       >
         {empty ? (
           <span className="px-1 py-4 text-[9px] text-white/30">—</span>
@@ -215,8 +208,7 @@ function RiverSide({
           rows.map((row, ri) => (
             <div
               key={ri}
-              className="practice-river-col flex"
-              style={colDirStyle}
+              className={["practice-river-col", colClass].join(" ")}
             >
               {row.map((t, i) => {
                 const globalIdx = ri * RIVER_ROW + i;
