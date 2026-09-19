@@ -22,7 +22,7 @@ type Props = {
 const SIZE = {
   xs: { w: 22, h: 30 },
   /** River / discard pond — smaller than hand for neat Tenhou ponds. */
-  river: { w: 20, h: 28 },
+  river: { w: 16, h: 22 },
   sm: { w: 32, h: 44 },
   /** Own hand — compact so the table stays glanceable. */
   hand: { w: 28, h: 40 },
