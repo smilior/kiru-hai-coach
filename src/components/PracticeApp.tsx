@@ -335,6 +335,8 @@ export function PracticeApp({ onExit }: Props) {
   const [ronPassKey, setRonPassKey] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const cpuTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Monotonic id so late /api/coach responses cannot overwrite a newer turn. */
+  const coachReqId = useRef(0);
 
   const lastDiscardKey = match.lastDiscard
     ? `${match.lastDiscard.seat}-${match.lastDiscard.tile}-${match.seats[match.lastDiscard.seat].river.length}`
@@ -347,7 +349,12 @@ export function PracticeApp({ onExit }: Props) {
   }, [match, ronPassKey, lastDiscardKey]);
 
   const promptText = useMemo(() => {
-    if (match.phase === "ended") return match.endReason || "練習終了";
+    // End overlay owns the full reason — avoid duplicate ghost text above it.
+    if (match.phase === "ended") {
+      if (match.endKind === "agari") return "和了";
+      if (match.endKind === "ryuukyoku") return "流局";
+      return "終局";
+    }
     if (humanCanRon && match.lastDiscard) {
       return `${SEAT_LABEL[match.lastDiscard.seat]}の${TILE_NAME_JA[match.lastDiscard.tile]} — ロンできます`;
     }
@@ -375,6 +382,8 @@ export function PracticeApp({ onExit }: Props) {
     setError(null);
     setRonPassKey(null);
     setSettingsOpen(false);
+    setCoachLoading(false);
+    coachReqId.current += 1;
   }, []);
 
   useEffect(() => {
@@ -455,6 +464,8 @@ export function PracticeApp({ onExit }: Props) {
     if (match.phase !== "playing") return;
     if (match.turn !== HUMAN_SEAT || !match.hasDrawn) return;
     if (!match.seats[HUMAN_SEAT].hand.includes(tile)) return;
+    coachReqId.current += 1;
+    setCoachLoading(false);
     setMatch((m) => discardFromTurn(m, tile));
     setSelected(null);
     setCoach(null);
@@ -488,26 +499,31 @@ export function PracticeApp({ onExit }: Props) {
     const hand = match.seats[HUMAN_SEAT].hand;
     if (hand.length !== 14) return;
 
+    const reqId = ++coachReqId.current;
+    const handSnapshot = [...hand];
+    const river = allRivers(match);
+
     setCoachLoading(true);
     setError(null);
     try {
-      const river = allRivers(match);
       const res = await fetch("/api/coach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          hand,
+          hand: handSnapshot,
           difficulty: "intermediate",
           river,
           mode: "vs-cpu",
         }),
       });
       const data = await res.json();
+      // Stale: user discarded / restarted while Jev was in flight
+      if (reqId !== coachReqId.current) return;
       if (!res.ok) throw new Error(data.error || "コーチ呼び出しに失敗しました");
 
-      const discard: TileId = hand.includes(data.discard)
+      const discard: TileId = handSnapshot.includes(data.discard)
         ? data.discard
-        : hand[hand.length - 1];
+        : handSnapshot[handSnapshot.length - 1];
       const scores: Scores = {
         efficiency: Number(data.scores?.efficiency ?? 0),
         safety: Number(data.scores?.safety ?? 0),
@@ -520,6 +536,8 @@ export function PracticeApp({ onExit }: Props) {
       }（実戦練習・mode=vs-cpu）`;
       setCoach({ discard, scores, explanation });
       setSelected(discard);
+      // Clear loading before Turso writes so 解説 does not stick on "…"
+      setCoachLoading(false);
 
       let pid = playerId;
       if (!pid) {
@@ -537,13 +555,13 @@ export function PracticeApp({ onExit }: Props) {
           }
         }
       }
-      if (pid) {
-        await fetch("/api/consultations", {
+      if (pid && reqId === coachReqId.current) {
+        void fetch("/api/consultations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             player_id: pid,
-            hand,
+            hand: handSnapshot,
             discard,
             scores,
             explanation,
@@ -551,8 +569,8 @@ export function PracticeApp({ onExit }: Props) {
         });
       }
     } catch (e) {
+      if (reqId !== coachReqId.current) return;
       setError(e instanceof Error ? e.message : "エラーが発生しました");
-    } finally {
       setCoachLoading(false);
     }
   }
@@ -705,15 +723,19 @@ export function PracticeApp({ onExit }: Props) {
         </div>
 
         <div className="relative z-10 mt-auto shrink-0 px-1 pb-1">
-          <p
-            className={[
-              "mb-0.5 text-center text-xs font-medium sm:text-sm",
-              humanTurn ? "text-amber-200" : "text-white/85",
-            ].join(" ")}
-          >
-            {promptText}
-          </p>
-          <ScoreLabel seat={bottom} highlight className="mb-1 text-center" />
+          {match.phase !== "ended" && (
+            <p
+              className={[
+                "mb-0.5 text-center text-xs font-medium sm:text-sm",
+                humanTurn ? "text-amber-200" : "text-white/85",
+              ].join(" ")}
+            >
+              {promptText}
+            </p>
+          )}
+          {match.phase !== "ended" && (
+            <ScoreLabel seat={bottom} highlight className="mb-1 text-center" />
+          )}
 
           {humanCanRon && lastDisc && (
             <div className="mb-2 flex justify-center gap-2">
@@ -791,7 +813,12 @@ export function PracticeApp({ onExit }: Props) {
               {humanTurn && humanCanTsumo && (
                 <button
                   type="button"
-                  onClick={() => setMatch((m) => declareTsumo(m))}
+                  onClick={() => {
+                    coachReqId.current += 1;
+                    setCoachLoading(false);
+                    setCoach(null);
+                    setMatch((m) => declareTsumo(m));
+                  }}
                   className="min-h-[40px] rounded-lg bg-rose-600 px-2 py-1.5 text-xs font-bold text-white"
                 >
                   ツモ
@@ -819,19 +846,25 @@ export function PracticeApp({ onExit }: Props) {
 
             <div className="practice-hand-scale min-w-0 flex-1 overflow-x-auto pb-0.5">
               <div className="practice-hand-row">
-                {closed.map((t, i) => (
+                {closed.map((t, i) => {
+                  const isRec = rec.closedIdx === i;
+                  const isSel =
+                    humanTurn &&
+                    selected === t &&
+                    !rec.drawn &&
+                    (coach ? isRec : closed.indexOf(t) === i);
+                  return (
                   <TileButton
                     key={`${t}-${i}-h`}
                     tile={t}
                     size="hand"
-                    glow={humanTurn && selected === t}
-                    recommended={rec.closedIdx === i}
-                    dimmed={Boolean(
-                      coach && rec.closedIdx !== i && selected !== t
-                    )}
+                    glow={isSel}
+                    recommended={isRec}
+                    dimmed={Boolean(coach && !isRec && !isSel)}
                     onClick={humanTurn ? () => onTileTap(t) : undefined}
                   />
-                ))}
+                  );
+                })}
                 {humanTurn && drawn && (
                   <>
                     <span className="mx-0.5 w-px shrink-0 self-stretch bg-white/20" />
@@ -873,8 +906,8 @@ export function PracticeApp({ onExit }: Props) {
                 ×
               </button>
             </div>
-            <div className="mt-1 [&_*]:text-white">
-              <ScoreBars scores={coach.scores} difficulty="advanced" />
+            <div className="mt-1">
+              <ScoreBars scores={coach.scores} difficulty="advanced" variant="onDark" />
             </div>
             <p className="mt-1 text-xs leading-relaxed text-white/90">
               {coach.explanation}
