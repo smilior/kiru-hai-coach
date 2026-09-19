@@ -46,9 +46,9 @@ export function TileButton({
     !faceOnly && onClick ? "active:scale-95" : "",
     "focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300",
     showGlow
-      ? "-translate-y-2 shadow-[0_0_14px_5px_rgba(251,191,36,0.75)] ring-2 ring-amber-300"
+      ? "-translate-y-1.5 ring-2 ring-amber-300/90"
       : "",
-    recommended && !showGlow ? "ring-2 ring-emerald-400 -translate-y-2" : "",
+    recommended && !showGlow ? "ring-2 ring-emerald-500 -translate-y-1" : "",
     highlighted && !showGlow ? "ring-2 ring-amber-400" : "",
     dimmed ? "opacity-40" : "",
     onClick && !faceOnly ? "cursor-pointer hover:-translate-y-1" : "cursor-default",

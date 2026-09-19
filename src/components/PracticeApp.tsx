@@ -28,6 +28,7 @@ import {
 
 const PLAYER_KEY = "khc_player_id";
 const CPU_DELAY_MS = 750;
+/** Tenhou / 電脳麻将 style: 6 tiles per river row. */
 const RIVER_ROW = 6;
 
 type CoachResponse = {
@@ -39,6 +40,17 @@ type CoachResponse = {
 type Props = {
   onExit?: () => void;
 };
+
+/** Highlight exactly one hand slot matching Jev discard (prefer drawn). */
+function recommendedSlots(
+  closed: TileId[],
+  drawn: TileId | null | undefined,
+  discard: TileId | null | undefined
+): { closedIdx: number; drawn: boolean } {
+  if (!discard) return { closedIdx: -1, drawn: false };
+  if (drawn && drawn === discard) return { closedIdx: -1, drawn: true };
+  return { closedIdx: closed.findIndex((t) => t === discard), drawn: false };
+}
 
 /** null = not measured yet (SSR / first paint); treat as blocked until known. */
 function useIsPortrait(): boolean | null {
@@ -53,6 +65,10 @@ function useIsPortrait(): boolean | null {
     const mq = window.matchMedia("(orientation: portrait)");
     mq.addEventListener("change", update);
     window.addEventListener("resize", update);
+    const orient = (
+      screen as Screen & { orientation?: { lock?: (o: string) => Promise<void> } }
+    ).orientation;
+    orient?.lock?.("landscape").catch(() => {});
     return () => {
       mq.removeEventListener("change", update);
       window.removeEventListener("resize", update);
@@ -70,85 +86,114 @@ function chunkRiver(tiles: TileId[]): TileId[][] {
   return rows.length ? rows : [[]];
 }
 
-/** Horizontal river (対面 / 自分). Tiles stay upright and readable. */
+/** Horizontal river (対面 / 自分). 6-tile rows; tiles upright. */
 function RiverHorizontal({
   tiles,
   last,
+  caption,
 }: {
   tiles: TileId[];
   last?: TileId | null;
+  caption?: string;
 }) {
   const rows = chunkRiver(tiles);
   return (
-    <div className="flex max-w-full flex-col items-center gap-px overflow-x-auto">
-      {rows.map((row, ri) => (
-        <div key={ri} className="flex flex-nowrap gap-px">
-          {row.map((t, i) => {
-            const globalIdx = ri * RIVER_ROW + i;
-            const isLast = Boolean(
-              last && last === t && globalIdx === tiles.length - 1
-            );
-            return (
-              <TileButton
-                key={`${t}-${globalIdx}`}
-                tile={t}
-                size="xs"
-                faceOnly
-                highlighted={isLast}
-              />
-            );
-          })}
-        </div>
-      ))}
+    <div className="flex max-w-full flex-col items-center gap-0.5 overflow-x-auto">
+      {caption && (
+        <span className="text-[9px] font-semibold tracking-wide text-white/70">
+          {caption}
+        </span>
+      )}
+      <div className="min-h-[32px] rounded border border-white/10 bg-black/15 px-0.5 py-0.5">
+        {rows.map((row, ri) => (
+          <div key={ri} className="flex flex-nowrap gap-px">
+            {row.length === 0 ? (
+              <span className="px-2 text-[9px] leading-[30px] text-white/30">
+                —
+              </span>
+            ) : (
+              row.map((t, i) => {
+                const globalIdx = ri * RIVER_ROW + i;
+                const isLast = Boolean(
+                  last && last === t && globalIdx === tiles.length - 1
+                );
+                return (
+                  <TileButton
+                    key={`${t}-${globalIdx}`}
+                    tile={t}
+                    size="xs"
+                    faceOnly
+                    highlighted={isLast}
+                  />
+                );
+              })
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
 /**
- * Side river (上家 / 下家): each discard "row" of 6 becomes a vertical column
- * so the full 河 stays visible without CSS rotate clipping.
+ * Side river (上家 / 下家): each 6-tile row becomes a column so the full 河
+ * stays visible (Tenhou-like clarity, no CSS rotate clipping).
  */
 function RiverSide({
   tiles,
   last,
   side,
+  caption,
 }: {
   tiles: TileId[];
   last?: TileId | null;
   side: "left" | "right";
+  caption?: string;
 }) {
   const rows = chunkRiver(tiles);
+  const empty = rows.every((r) => r.length === 0);
   return (
-    <div
-      className={[
-        "flex max-h-full items-end gap-px overflow-y-auto",
-        side === "left" ? "flex-row-reverse" : "flex-row",
-      ].join(" ")}
-    >
-      {rows.map((row, ri) => (
-        <div key={ri} className="flex flex-col gap-px">
-          {row.map((t, i) => {
-            const globalIdx = ri * RIVER_ROW + i;
-            const isLast = Boolean(
-              last && last === t && globalIdx === tiles.length - 1
-            );
-            return (
-              <TileButton
-                key={`${t}-${globalIdx}`}
-                tile={t}
-                size="xs"
-                faceOnly
-                highlighted={isLast}
-              />
-            );
-          })}
-        </div>
-      ))}
+    <div className="flex max-h-full flex-col items-center gap-0.5">
+      {caption && (
+        <span className="text-[9px] font-semibold tracking-wide text-white/70">
+          {caption}
+        </span>
+      )}
+      <div
+        className={[
+          "flex max-h-full min-h-[64px] items-end gap-px overflow-y-auto rounded border border-white/10 bg-black/15 px-0.5 py-0.5",
+          side === "left" ? "flex-row-reverse" : "flex-row",
+        ].join(" ")}
+      >
+        {empty ? (
+          <span className="px-1 py-4 text-[9px] text-white/30">—</span>
+        ) : (
+          rows.map((row, ri) => (
+            <div key={ri} className="flex flex-col gap-px">
+              {row.map((t, i) => {
+                const globalIdx = ri * RIVER_ROW + i;
+                const isLast = Boolean(
+                  last && last === t && globalIdx === tiles.length - 1
+                );
+                return (
+                  <TileButton
+                    key={`${t}-${globalIdx}`}
+                    tile={t}
+                    size="xs"
+                    faceOnly
+                    highlighted={isLast}
+                  />
+                );
+              })}
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }
 
-/** Tenhou-style center: kyoku + remaining + dora (flat, glanceable). */
+/** Center: kyoku + remaining; winds; dora also mirrored top-right in HUD. */
 function CenterBox({
   roundLabel,
   remaining,
@@ -172,16 +217,24 @@ function CenterBox({
 
   return (
     <div className="relative flex h-[5.25rem] w-[5.75rem] shrink-0 flex-col items-center justify-center gap-0.5 border border-white/35 bg-black/45 px-1 py-1 text-center sm:h-24 sm:w-28">
-      <span className={`${windClass(VIEW_SEATS.top)} top-0.5 left-1/2 -translate-x-1/2`}>
+      <span
+        className={`${windClass(VIEW_SEATS.top)} top-0.5 left-1/2 -translate-x-1/2`}
+      >
         {SEAT_LABEL[VIEW_SEATS.top]}
       </span>
-      <span className={`${windClass(VIEW_SEATS.left)} left-1 top-1/2 -translate-y-1/2`}>
+      <span
+        className={`${windClass(VIEW_SEATS.left)} left-1 top-1/2 -translate-y-1/2`}
+      >
         {SEAT_LABEL[VIEW_SEATS.left]}
       </span>
-      <span className={`${windClass(VIEW_SEATS.right)} right-1 top-1/2 -translate-y-1/2`}>
+      <span
+        className={`${windClass(VIEW_SEATS.right)} right-1 top-1/2 -translate-y-1/2`}
+      >
         {SEAT_LABEL[VIEW_SEATS.right]}
       </span>
-      <span className={`${windClass(VIEW_SEATS.bottom)} bottom-0.5 left-1/2 -translate-x-1/2`}>
+      <span
+        className={`${windClass(VIEW_SEATS.bottom)} bottom-0.5 left-1/2 -translate-x-1/2`}
+      >
         {SEAT_LABEL[VIEW_SEATS.bottom]}
       </span>
       <span className="text-sm font-bold tracking-wide text-white sm:text-base">
@@ -234,7 +287,7 @@ function PortraitGate({ onExit }: { onExit?: () => void }) {
       }}
       role="dialog"
       aria-modal="true"
-      aria-label="横向きにしてください"
+      aria-label="横にしてください"
     >
       <div
         className="pointer-events-none absolute inset-0 border-[3px] border-[#2a1a14]"
@@ -243,11 +296,12 @@ function PortraitGate({ onExit }: { onExit?: () => void }) {
       <p className="text-2xl" aria-hidden>
         📱↻
       </p>
-      <p className="text-lg font-bold text-white">
+      <p className="text-lg font-bold text-amber-200">横にしてください</p>
+      <p className="text-sm font-medium text-white">
         実戦練習は横向き専用です
       </p>
       <p className="max-w-sm text-sm leading-relaxed text-white/85">
-        端末を横向き（ランドスケープ）に回転してください。縦向きでは対局できません。
+        天鳳・雀魂などと同じく、卓と河を横画面で表示します。端末を横に回転してください。
       </p>
       {onExit && (
         <button
@@ -343,7 +397,6 @@ export function PracticeApp({ onExit }: Props) {
   }, []);
 
   useEffect(() => {
-    // Pause CPU / draws while portrait gate is up (or orientation unknown)
     if (isPortrait !== false) return;
     if (match.phase !== "playing") return;
     if (humanCanRon) return;
@@ -405,6 +458,21 @@ export function PracticeApp({ onExit }: Props) {
     setError(null);
   }
 
+  const human = match.seats[HUMAN_SEAT];
+  const humanTurn =
+    match.phase === "playing" &&
+    match.turn === HUMAN_SEAT &&
+    match.hasDrawn;
+  const drawn = match.drawnTile;
+  const closed = humanTurn && drawn ? human.hand.slice(0, -1) : human.hand;
+  const lastDisc = match.lastDiscard;
+  const humanCanTsumo = humanTurn && canTsumo(match);
+  const rec = recommendedSlots(
+    closed,
+    humanTurn ? drawn : null,
+    coach?.discard
+  );
+
   function onTileTap(tile: TileId) {
     if (!humanTurn) return;
     if (selected === tile) {
@@ -436,13 +504,21 @@ export function PracticeApp({ onExit }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "コーチ呼び出しに失敗しました");
 
-      const explanation = `${data.explanation}（実戦練習・mode=vs-cpu）`;
-      setCoach({
-        discard: data.discard,
-        scores: data.scores,
-        explanation,
-      });
-      setSelected(data.discard);
+      const discard: TileId = hand.includes(data.discard)
+        ? data.discard
+        : hand[hand.length - 1];
+      const scores: Scores = {
+        efficiency: Number(data.scores?.efficiency ?? 0),
+        safety: Number(data.scores?.safety ?? 0),
+        wait: Number(data.scores?.wait ?? 0),
+      };
+      const explanation = `${
+        typeof data.explanation === "string"
+          ? data.explanation
+          : `推奨は「${TILE_NAME_JA[discard]}」です。`
+      }（実戦練習・mode=vs-cpu）`;
+      setCoach({ discard, scores, explanation });
+      setSelected(discard);
 
       let pid = playerId;
       if (!pid) {
@@ -467,8 +543,8 @@ export function PracticeApp({ onExit }: Props) {
           body: JSON.stringify({
             player_id: pid,
             hand,
-            discard: data.discard,
-            scores: data.scores,
+            discard,
+            scores,
             explanation,
           }),
         });
@@ -480,22 +556,11 @@ export function PracticeApp({ onExit }: Props) {
     }
   }
 
-  const human = match.seats[HUMAN_SEAT];
-  const humanTurn =
-    match.phase === "playing" &&
-    match.turn === HUMAN_SEAT &&
-    match.hasDrawn;
-  const drawn = match.drawnTile;
-  const closed = humanTurn && drawn ? human.hand.slice(0, -1) : human.hand;
-  const lastDisc = match.lastDiscard;
-  const humanCanTsumo = humanTurn && canTsumo(match);
-
   const top = VIEW_SEATS.top;
   const left = VIEW_SEATS.left;
   const right = VIEW_SEATS.right;
   const bottom = VIEW_SEATS.bottom;
 
-  // Do not render the table until orientation is known; never play in portrait.
   if (isPortrait === null) {
     return (
       <div
@@ -511,21 +576,19 @@ export function PracticeApp({ onExit }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-30 flex flex-col overflow-hidden"
+      className="practice-landscape-root fixed inset-0 z-30 flex flex-col overflow-hidden"
       style={{
         background:
           "radial-gradient(ellipse at center, #1a5c38 0%, #0f3d26 55%, #0a2e1c 100%)",
       }}
     >
-      {/* Wood frame */}
       <div
         className="pointer-events-none absolute inset-0 z-40 border-[3px] border-[#2a1a14]"
         aria-hidden
       />
 
-      {/* Table surface */}
       <div className="relative flex min-h-0 flex-1 flex-col px-2 pb-1 pt-2 sm:px-3 sm:pt-3">
-        {/* Corner scores + dora */}
+        {/* Corner scores (Tenhou-like) + dora top-right readable */}
         <div className="relative z-10 mb-1 flex shrink-0 items-start justify-between gap-2 px-1">
           <div className="space-y-0.5">
             <ScoreLabel seat={top} />
@@ -533,11 +596,13 @@ export function PracticeApp({ onExit }: Props) {
           </div>
           <div className="flex flex-col items-end gap-1">
             <ScoreLabel seat={right} className="text-right" />
-            <ScoreLabel seat={bottom} highlight className="text-right" />
+            <div className="inline-flex items-center gap-1.5 rounded border border-amber-400/50 bg-black/30 px-1.5 py-0.5">
+              <span className="text-[10px] font-bold text-amber-200">ドラ</span>
+              <TileButton tile={match.doraIndicator} size="xs" faceOnly />
+            </div>
           </div>
         </div>
 
-        {/* Side outlined buttons */}
         <div className="absolute right-2 top-14 z-20 flex flex-col gap-2 sm:right-3 sm:top-16">
           <button
             type="button"
@@ -551,21 +616,21 @@ export function PracticeApp({ onExit }: Props) {
                 setShowRyuukyoku(true);
               }
             }}
-            className="min-h-[36px] rounded border border-amber-400/70 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 sm:text-xs"
+            className="min-h-[36px] rounded border border-white/40 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 sm:text-xs"
           >
             流局を表示
           </button>
           <button
             type="button"
             onClick={() => setSettingsOpen((v) => !v)}
-            className="min-h-[36px] rounded border border-amber-400/70 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 sm:text-xs"
+            className="min-h-[36px] rounded border border-white/40 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 sm:text-xs"
           >
             設定
           </button>
         </div>
 
         {settingsOpen && (
-          <div className="absolute right-2 top-32 z-30 w-40 rounded-lg border border-amber-400/50 bg-emerald-950/95 p-2 shadow-xl sm:right-3">
+          <div className="absolute right-2 top-32 z-30 w-40 rounded-lg border border-white/30 bg-emerald-950/95 p-2 shadow-xl sm:right-3">
             <button
               type="button"
               onClick={restart}
@@ -595,23 +660,23 @@ export function PracticeApp({ onExit }: Props) {
           </div>
         )}
 
-        {/* Center table: rivers + box — flex so all 河 stay visible */}
+        {/* Seat map: bottom=self, top=toimen, left=kamicha, right=shimocha */}
         <div className="relative mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col items-stretch justify-center gap-1 py-1">
-          {/* Top river (西 対面) */}
-          <div className="flex min-h-0 shrink justify-center overflow-visible px-8">
+          <div className="flex min-h-0 shrink justify-center overflow-visible px-6">
             <RiverHorizontal
               tiles={match.seats[top].river}
               last={lastDisc?.seat === top ? lastDisc.tile : null}
+              caption={`${RELATIVE_LABEL[top]}河`}
             />
           </div>
 
           <div className="flex min-h-0 w-full flex-1 items-center justify-center gap-2 sm:gap-3">
-            {/* Left river (北 上家) — full 河, upright */}
             <div className="flex h-full min-w-[56px] max-w-[30%] flex-1 items-center justify-end overflow-visible sm:min-w-[72px]">
               <RiverSide
                 tiles={match.seats[left].river}
                 last={lastDisc?.seat === left ? lastDisc.tile : null}
                 side="left"
+                caption={RELATIVE_LABEL[left]}
               />
             </div>
 
@@ -623,26 +688,25 @@ export function PracticeApp({ onExit }: Props) {
               doraIndicator={match.doraIndicator}
             />
 
-            {/* Right river (南 下家) */}
             <div className="flex h-full min-w-[56px] max-w-[30%] flex-1 items-center justify-start overflow-visible sm:min-w-[72px]">
               <RiverSide
                 tiles={match.seats[right].river}
                 last={lastDisc?.seat === right ? lastDisc.tile : null}
                 side="right"
+                caption={RELATIVE_LABEL[right]}
               />
             </div>
           </div>
 
-          {/* Bottom river (東 あなた) */}
-          <div className="flex min-h-0 shrink justify-center overflow-visible px-8">
+          <div className="flex min-h-0 shrink justify-center overflow-visible px-6">
             <RiverHorizontal
               tiles={match.seats[bottom].river}
               last={lastDisc?.seat === bottom ? lastDisc.tile : null}
+              caption={`${RELATIVE_LABEL[bottom]}河`}
             />
           </div>
         </div>
 
-        {/* Human score + prompt + hand */}
         <div className="relative z-10 mt-auto shrink-0 px-1 pb-1">
           <p
             className={[
@@ -652,7 +716,8 @@ export function PracticeApp({ onExit }: Props) {
           >
             {promptText}
           </p>
-          {/* Ron overlay */}
+          <ScoreLabel seat={bottom} highlight className="mb-1 text-center" />
+
           {humanCanRon && lastDisc && (
             <div className="mb-2 flex justify-center gap-2">
               <button
@@ -672,9 +737,8 @@ export function PracticeApp({ onExit }: Props) {
             </div>
           )}
 
-          {/* End overlay */}
           {(match.phase === "ended" || showRyuukyoku) && (
-            <div className="mb-2 rounded-xl border border-amber-400/40 bg-emerald-950/90 px-3 py-3 text-center">
+            <div className="mb-2 rounded-xl border border-white/25 bg-emerald-950/90 px-3 py-3 text-center">
               <p className="text-sm font-semibold text-white">
                 {match.endReason || "流局"}
               </p>
@@ -700,7 +764,7 @@ export function PracticeApp({ onExit }: Props) {
             </div>
           )}
 
-          {/* Hand + 解説 — single non-wrapping row */}
+          {/* Own hand: single bottom row, white faces via TileButton */}
           <div className="flex items-end gap-2">
             <div className="flex shrink-0 flex-col gap-1.5 pb-1">
               <button
@@ -748,8 +812,10 @@ export function PracticeApp({ onExit }: Props) {
                     tile={t}
                     size="hand"
                     glow={humanTurn && selected === t}
-                    recommended={Boolean(coach && coach.discard === t)}
-                    dimmed={Boolean(coach && coach.discard !== t && selected !== t)}
+                    recommended={rec.closedIdx === i}
+                    dimmed={Boolean(
+                      coach && rec.closedIdx !== i && selected !== t
+                    )}
                     onClick={humanTurn ? () => onTileTap(t) : undefined}
                   />
                 ))}
@@ -760,9 +826,9 @@ export function PracticeApp({ onExit }: Props) {
                       tile={drawn}
                       size="hand"
                       glow={selected === drawn}
-                      recommended={Boolean(coach && coach.discard === drawn)}
+                      recommended={rec.drawn}
                       dimmed={Boolean(
-                        coach && coach.discard !== drawn && selected !== drawn
+                        coach && !rec.drawn && selected !== drawn
                       )}
                       onClick={() => onTileTap(drawn)}
                     />
@@ -779,9 +845,8 @@ export function PracticeApp({ onExit }: Props) {
           )}
         </div>
 
-        {/* Jev card: floating, closable, does not push/block the table hand */}
         {coach && (
-          <section className="absolute bottom-20 left-2 right-2 z-50 mx-auto max-h-[40vh] max-w-lg overflow-y-auto rounded-xl border border-amber-400/40 bg-emerald-950/95 p-3 text-white shadow-2xl sm:bottom-24">
+          <section className="absolute bottom-20 left-2 right-2 z-50 mx-auto max-h-[40vh] max-w-lg overflow-y-auto rounded-xl border border-white/30 bg-emerald-950/95 p-3 text-white shadow-2xl sm:bottom-24">
             <div className="mb-1 flex items-start justify-between gap-2">
               <h2 className="text-xs font-semibold text-amber-200">
                 推奨: {TILE_NAME_JA[coach.discard]}（{coach.discard}）
