@@ -724,19 +724,21 @@ export function PracticeApp({ onExit }: Props) {
           </div>
         </div>
 
-        <div className="relative z-10 mt-auto shrink-0 px-1 pb-1">
+        <div className="relative z-20 mt-auto shrink-0 border-t border-white/10 bg-gradient-to-t from-[#0a2e1c] via-[#0f3d26]/95 to-[#0f3d26]/80 px-1 pb-1 pt-1.5">
           {match.phase !== "ended" && (
-            <p
-              className={[
-                "mb-0.5 text-center text-xs font-medium sm:text-sm",
-                humanTurn ? "text-amber-200" : "text-white/85",
-              ].join(" ")}
-            >
-              {promptText}
-            </p>
-          )}
-          {match.phase !== "ended" && (
-            <ScoreLabel seat={bottom} highlight className="mb-1 text-center" />
+            <div className="mb-1 flex items-center justify-center gap-2">
+              <p
+                className={[
+                  "inline-flex max-w-full items-center rounded-full border px-2.5 py-0.5 text-center text-[11px] font-semibold sm:text-xs",
+                  humanTurn
+                    ? "border-amber-400/50 bg-black/55 text-amber-100"
+                    : "border-white/25 bg-black/45 text-white/90",
+                ].join(" ")}
+              >
+                {promptText}
+              </p>
+              <ScoreLabel seat={bottom} highlight className="shrink-0" />
+            </div>
           )}
 
           {humanCanRon && lastDisc && (

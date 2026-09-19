@@ -159,7 +159,8 @@ body {
   margin-inline: auto;
   flex: 1 1 auto;
   min-height: 0;
-  overflow: visible;
+  /* Clip rivers so they never paint over the bottom prompt/hand strip */
+  overflow: hidden;
 }
 @media (min-width: 640px) {
   .practice-table-grid {
