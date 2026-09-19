@@ -7,7 +7,10 @@ import { TILE_NAME_JA, type TileId } from "@/lib/tiles";
 import type { Scores } from "@/lib/explanation";
 import {
   HUMAN_SEAT,
+  RELATIVE_LABEL,
   SEAT_LABEL,
+  START_SCORE,
+  VIEW_SEATS,
   allRivers,
   canTsumo,
   createMatch,
@@ -17,6 +20,7 @@ import {
   discardFromTurn,
   drawForTurn,
   endPractice,
+  formatScore,
   ronCandidates,
   type MatchState,
   type Seat,
@@ -24,6 +28,7 @@ import {
 
 const PLAYER_KEY = "khc_player_id";
 const CPU_DELAY_MS = 750;
+const RIVER_ROW = 6;
 
 type CoachResponse = {
   discard: TileId;
@@ -31,90 +36,132 @@ type CoachResponse = {
   explanation: string;
 };
 
-function RiverRow({
+type Props = {
+  onExit?: () => void;
+};
+
+function chunkRiver(tiles: TileId[]): TileId[][] {
+  const rows: TileId[][] = [];
+  for (let i = 0; i < tiles.length; i += RIVER_ROW) {
+    rows.push(tiles.slice(i, i + RIVER_ROW));
+  }
+  return rows.length ? rows : [[]];
+}
+
+function RiverGrid({
   tiles,
-  align = "center",
   last,
+  rotate = 0,
 }: {
   tiles: TileId[];
-  align?: "center" | "start" | "end";
   last?: TileId | null;
+  rotate?: 0 | 90 | 180 | 270;
 }) {
-  const justify =
-    align === "start"
-      ? "justify-start"
-      : align === "end"
-        ? "justify-end"
-        : "justify-center";
-  if (tiles.length === 0) {
-    return (
-      <div className={`flex min-h-[38px] flex-wrap gap-0.5 ${justify}`}>
-        <span className="text-[10px] text-emerald-800/40">（河なし）</span>
-      </div>
-    );
-  }
+  const rows = chunkRiver(tiles);
+  const rot =
+    rotate === 90
+      ? "rotate-90"
+      : rotate === 180
+        ? "rotate-180"
+        : rotate === 270
+          ? "-rotate-90"
+          : "";
+
   return (
-    <div className={`flex max-w-full flex-wrap gap-0.5 ${justify}`}>
-      {tiles.map((t, i) => (
-        <TileButton
-          key={`${t}-${i}`}
-          tile={t}
-          size="xs"
-          faceOnly
-          highlighted={Boolean(last && last === t && i === tiles.length - 1)}
-        />
+    <div className={`flex flex-col items-center gap-0.5 ${rot}`}>
+      {rows.map((row, ri) => (
+        <div key={ri} className="flex gap-px">
+          {row.map((t, i) => {
+            const globalIdx = ri * RIVER_ROW + i;
+            const isLast = Boolean(
+              last && last === t && globalIdx === tiles.length - 1
+            );
+            return (
+              <TileButton
+                key={`${t}-${globalIdx}`}
+                tile={t}
+                size="xs"
+                faceOnly
+                highlighted={isLast}
+              />
+            );
+          })}
+        </div>
       ))}
     </div>
   );
 }
 
-function SeatBadge({
+function CenterBox({
+  roundLabel,
+  remaining,
+  turn,
+  phase,
+}: {
+  roundLabel: string;
+  remaining: number;
+  turn: Seat;
+  phase: MatchState["phase"];
+}) {
+  const windClass = (seat: Seat) =>
+    [
+      "absolute text-[11px] font-bold leading-none",
+      turn === seat && phase === "playing"
+        ? "text-amber-300"
+        : "text-white/85",
+    ].join(" ");
+
+  return (
+    <div className="relative flex h-[4.5rem] w-[4.5rem] shrink-0 flex-col items-center justify-center border border-amber-400/80 bg-emerald-950/40 text-center shadow-[inset_0_0_12px_rgba(0,0,0,0.35)] sm:h-20 sm:w-20">
+      <span className={`${windClass(VIEW_SEATS.top)} top-0.5 left-1/2 -translate-x-1/2`}>
+        {SEAT_LABEL[VIEW_SEATS.top]}
+      </span>
+      <span className={`${windClass(VIEW_SEATS.left)} left-1 top-1/2 -translate-y-1/2`}>
+        {SEAT_LABEL[VIEW_SEATS.left]}
+      </span>
+      <span className={`${windClass(VIEW_SEATS.right)} right-1 top-1/2 -translate-y-1/2`}>
+        {SEAT_LABEL[VIEW_SEATS.right]}
+      </span>
+      <span className={`${windClass(VIEW_SEATS.bottom)} bottom-0.5 left-1/2 -translate-x-1/2`}>
+        {SEAT_LABEL[VIEW_SEATS.bottom]}
+      </span>
+      <span className="text-sm font-bold tracking-wide text-white sm:text-base">
+        {phase === "ended" ? "終局" : roundLabel}
+      </span>
+      <span className="text-[10px] text-white/80 sm:text-xs">
+        残り {remaining}
+      </span>
+    </div>
+  );
+}
+
+function ScoreLabel({
   seat,
-  isTurn,
-  isHuman,
+  highlight,
+  className = "",
 }: {
   seat: Seat;
-  isTurn: boolean;
-  isHuman: boolean;
+  highlight?: boolean;
+  className?: string;
 }) {
   return (
-    <div
-      className={[
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
-        isTurn
-          ? "bg-amber-400 text-stone-900 ring-2 ring-amber-200"
-          : "bg-emerald-900/70 text-emerald-50",
-      ].join(" ")}
-    >
-      <span>{SEAT_LABEL[seat]}</span>
-      <span className="font-normal opacity-90">
-        {isHuman ? "あなた" : "CPU"}
+    <div className={`text-[11px] leading-tight sm:text-xs ${className}`}>
+      <span
+        className={
+          highlight ? "font-bold text-amber-300" : "font-semibold text-white"
+        }
+      >
+        {SEAT_LABEL[seat]}
+      </span>{" "}
+      <span className="text-white/90">{RELATIVE_LABEL[seat]}</span>{" "}
+      <span className="font-mono text-white/95">
+        {formatScore(START_SCORE)}
       </span>
-      {isTurn && <span className="text-[10px]">手番</span>}
     </div>
   );
 }
 
-function CpuHandBacks({ count }: { count: number }) {
-  return (
-    <div className="flex justify-center gap-0.5 opacity-70" aria-hidden>
-      {Array.from({ length: Math.min(count, 14) }).map((_, i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={i}
-          src="/tiles/Back.png"
-          alt=""
-          width={18}
-          height={24}
-          className="rounded-sm"
-          draggable={false}
-        />
-      ))}
-    </div>
-  );
-}
-
-export function PracticeApp() {
+export function PracticeApp({ onExit }: Props) {
   const [match, setMatch] = useState<MatchState>(() => createMatch());
   const [selected, setSelected] = useState<TileId | null>(null);
   const [coachLoading, setCoachLoading] = useState(false);
@@ -124,8 +171,9 @@ export function PracticeApp() {
     if (typeof window === "undefined") return null;
     return localStorage.getItem(PLAYER_KEY);
   });
-  /** lastDiscard key the human chose to pass on. */
   const [ronPassKey, setRonPassKey] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showRyuukyoku, setShowRyuukyoku] = useState(false);
   const cpuTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const lastDiscardKey = match.lastDiscard
@@ -138,25 +186,25 @@ export function PracticeApp() {
     return ronCandidates(match).includes(HUMAN_SEAT);
   }, [match, ronPassKey, lastDiscardKey]);
 
-  const statusLine = useMemo(() => {
+  const promptText = useMemo(() => {
     if (match.phase === "ended") return match.endReason || "練習終了";
     if (humanCanRon && match.lastDiscard) {
       return `${SEAT_LABEL[match.lastDiscard.seat]}の${TILE_NAME_JA[match.lastDiscard.tile]} — ロンできます`;
     }
     if (!match.hasDrawn) {
       return match.turn === HUMAN_SEAT
-        ? "あなたがツモります…"
-        : `${SEAT_LABEL[match.turn]}（CPU）の番です…`;
+        ? "ツモっています…"
+        : `${SEAT_LABEL[match.turn]}の番です…`;
     }
     if (match.turn === HUMAN_SEAT) {
       if (canTsumo(match)) return "形が揃いました。ツモできます。";
-      return "あなたの番です。切る牌を選んでください。";
+      return "打牌する牌を選択";
     }
     if (match.lastDiscard) {
       const { seat, tile } = match.lastDiscard;
       return `${SEAT_LABEL[seat]} が ${TILE_NAME_JA[tile]} を切りました`;
     }
-    return `${SEAT_LABEL[match.turn]}（CPU）が考えています…`;
+    return `${SEAT_LABEL[match.turn]}が考えています…`;
   }, [match, humanCanRon]);
 
   const restart = useCallback(() => {
@@ -166,6 +214,8 @@ export function PracticeApp() {
     setCoach(null);
     setError(null);
     setRonPassKey(null);
+    setSettingsOpen(false);
+    setShowRyuukyoku(false);
   }, []);
 
   useEffect(() => {
@@ -190,7 +240,6 @@ export function PracticeApp() {
     })();
   }, []);
 
-  // Draw + CPU auto-play (paused while human can ron)
   useEffect(() => {
     if (match.phase !== "playing") return;
     if (humanCanRon) return;
@@ -201,7 +250,6 @@ export function PracticeApp() {
       const t = setTimeout(() => {
         setMatch((m) => {
           if (m.phase !== "playing" || m.hasDrawn) return m;
-          // Caller already cleared humanCanRon via ronPassKey; do not re-block here.
           const next = drawForTurn(m);
           if (
             next.phase === "playing" &&
@@ -245,16 +293,25 @@ export function PracticeApp() {
   function humanDiscard(tile: TileId) {
     if (match.phase !== "playing") return;
     if (match.turn !== HUMAN_SEAT || !match.hasDrawn) return;
-    if (!match.seats.S.hand.includes(tile)) return;
+    if (!match.seats[HUMAN_SEAT].hand.includes(tile)) return;
     setMatch((m) => discardFromTurn(m, tile));
     setSelected(null);
     setCoach(null);
     setError(null);
   }
 
+  function onTileTap(tile: TileId) {
+    if (!humanTurn) return;
+    if (selected === tile) {
+      humanDiscard(tile);
+      return;
+    }
+    setSelected(tile);
+  }
+
   async function askCoach() {
     if (match.turn !== HUMAN_SEAT || !match.hasDrawn) return;
-    const hand = match.seats.S.hand;
+    const hand = match.seats[HUMAN_SEAT].hand;
     if (hand.length !== 14) return;
 
     setCoachLoading(true);
@@ -318,7 +375,7 @@ export function PracticeApp() {
     }
   }
 
-  const human = match.seats.S;
+  const human = match.seats[HUMAN_SEAT];
   const humanTurn =
     match.phase === "playing" &&
     match.turn === HUMAN_SEAT &&
@@ -328,249 +385,309 @@ export function PracticeApp() {
   const lastDisc = match.lastDiscard;
   const humanCanTsumo = humanTurn && canTsumo(match);
 
+  const top = VIEW_SEATS.top;
+  const left = VIEW_SEATS.left;
+  const right = VIEW_SEATS.right;
+  const bottom = VIEW_SEATS.bottom;
+
   return (
-    <div className="flex w-full flex-col gap-3 py-1 pb-28">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-stone-600">
-          山あと{" "}
-          <span className="font-mono font-semibold">{match.wall.length}</span>{" "}
-          枚
-        </p>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setMatch((m) => endPractice(m))}
-            disabled={match.phase === "ended"}
-            className="rounded-full border border-stone-300 bg-white px-3 py-1 text-xs font-medium text-stone-700 disabled:opacity-40"
-          >
-            練習終了
-          </button>
-          <button
-            type="button"
-            onClick={restart}
-            className="rounded-full bg-stone-800 px-3 py-1 text-xs font-medium text-white active:scale-95"
-          >
-            配り直し
-          </button>
-        </div>
-      </div>
+    <div
+      className="fixed inset-0 z-30 flex flex-col overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(ellipse at center, #1a5c38 0%, #0f3d26 55%, #0a2e1c 100%)",
+      }}
+    >
+      {/* Wood frame */}
+      <div
+        className="pointer-events-none absolute inset-0 z-40 border-[5px] border-[#3e2723] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"
+        aria-hidden
+      />
 
-      <div className="relative overflow-hidden rounded-3xl border border-emerald-900/20 bg-gradient-to-b from-emerald-800 to-emerald-950 p-3 shadow-inner">
-        <div className="mb-2 flex flex-col items-center gap-1">
-          <SeatBadge
-            seat="N"
-            isTurn={match.turn === "N" && match.phase === "playing"}
-            isHuman={false}
-          />
-          <CpuHandBacks count={match.seats.N.hand.length} />
-          <RiverRow
-            tiles={match.seats.N.river}
-            last={lastDisc?.seat === "N" ? lastDisc.tile : null}
-          />
-        </div>
-
-        <div className="mb-2 grid grid-cols-[1fr_auto_1fr] items-start gap-2">
-          <div className="flex flex-col items-start gap-1">
-            <SeatBadge
-              seat="W"
-              isTurn={match.turn === "W" && match.phase === "playing"}
-              isHuman={false}
-            />
-            <CpuHandBacks count={match.seats.W.hand.length} />
-            <RiverRow
-              tiles={match.seats.W.river}
-              align="start"
-              last={lastDisc?.seat === "W" ? lastDisc.tile : null}
-            />
-          </div>
-          <div className="flex h-16 w-16 flex-col items-center justify-center rounded-full border border-emerald-600/40 bg-emerald-900/50 text-center">
-            <span className="text-[10px] text-emerald-200/80">場</span>
-            <span className="text-xs font-bold text-amber-200">
-              {match.phase === "ended" ? "終局" : `${SEAT_LABEL[match.turn]}番`}
-            </span>
+      {/* Table surface */}
+      <div className="relative flex min-h-0 flex-1 flex-col px-2 pb-1 pt-2 sm:px-3 sm:pt-3">
+        {/* Corner scores + dora */}
+        <div className="relative z-10 mb-1 flex items-start justify-between gap-2 px-1">
+          <div className="space-y-0.5">
+            <ScoreLabel seat={top} />
+            <ScoreLabel seat={left} />
           </div>
           <div className="flex flex-col items-end gap-1">
-            <SeatBadge
-              seat="E"
-              isTurn={match.turn === "E" && match.phase === "playing"}
-              isHuman={false}
-            />
-            <CpuHandBacks count={match.seats.E.hand.length} />
-            <RiverRow
-              tiles={match.seats.E.river}
-              align="end"
-              last={lastDisc?.seat === "E" ? lastDisc.tile : null}
-            />
+            <ScoreLabel seat={right} className="text-right" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-medium text-white/90">ドラ</span>
+              <TileButton tile={match.doraIndicator} size="xs" faceOnly />
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-1 border-t border-emerald-700/40 pt-2">
-          <SeatBadge
-            seat="S"
-            isTurn={match.turn === "S" && match.phase === "playing"}
-            isHuman
-          />
-          <RiverRow
-            tiles={match.seats.S.river}
-            last={lastDisc?.seat === "S" ? lastDisc.tile : null}
-          />
-        </div>
-      </div>
-
-      <p className="text-center text-sm text-stone-600">{statusLine}</p>
-
-      {humanCanRon && lastDisc && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-center shadow-sm">
-          <p className="text-sm font-semibold text-rose-800">
-            ロンできます！（{TILE_NAME_JA[lastDisc.tile]}）
-          </p>
-          <div className="mt-2 flex justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => setMatch((m) => declareRon(m, HUMAN_SEAT))}
-              className="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white"
-            >
-              ロン
-            </button>
-            <button
-              type="button"
-              onClick={() => setRonPassKey(lastDiscardKey)}
-              className="rounded-xl border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium text-stone-700"
-            >
-              スルー
-            </button>
-          </div>
-          <p className="mt-1 text-[10px] text-stone-500">
-            点数計算なし・形完成のみ
-          </p>
-        </div>
-      )}
-
-      {match.phase === "ended" && (
-        <div className="rounded-2xl border border-stone-200 bg-white p-4 text-center shadow-sm">
-          <p className="text-sm font-medium text-stone-800">
-            {match.endReason || "練習終了"}
-          </p>
-          <p className="mt-1 text-xs text-stone-500">
-            ※ V1.5は簡易ルール（役・点数・鳴きなし。形完成のツモ/ロンのみ）。河を見ながら切る感覚の練習です。
-          </p>
+        {/* Side outlined buttons */}
+        <div className="absolute right-2 top-16 z-20 flex flex-col gap-2 sm:right-3 sm:top-20">
           <button
             type="button"
-            onClick={restart}
-            className="mt-3 rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-white"
+            onClick={() => {
+              if (match.phase === "ended") {
+                setShowRyuukyoku(true);
+              } else {
+                setMatch((m) =>
+                  endPractice(m, "流局（表示）— 山を残して終了しました。")
+                );
+                setShowRyuukyoku(true);
+              }
+            }}
+            className="rounded border border-amber-400/70 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 sm:text-xs"
           >
-            もう一度
+            流局を表示
+          </button>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen((v) => !v)}
+            className="rounded border border-amber-400/70 bg-transparent px-2 py-1.5 text-[10px] font-medium text-white/95 active:bg-white/10 sm:text-xs"
+          >
+            設定
           </button>
         </div>
-      )}
 
-      <section className="rounded-2xl border border-stone-200 bg-white p-3 shadow-sm">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-stone-800">
-            あなたの手牌（{human.hand.length}枚）
-          </h2>
-          {humanTurn && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
-              切る牌をタップ
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap justify-center gap-1.5">
-          {closed.map((t, i) => (
-            <TileButton
-              key={`${t}-${i}-h`}
-              tile={t}
-              size="md"
-              selected={humanTurn && selected === t && coach?.discard !== t}
-              recommended={Boolean(coach && coach.discard === t)}
-              dimmed={Boolean(coach && coach.discard !== t)}
-              onClick={humanTurn ? () => setSelected(t) : undefined}
-            />
-          ))}
-        </div>
-
-        {humanTurn && drawn && (
-          <div className="mt-3 flex flex-col items-center gap-1">
-            <span className="text-xs font-medium text-stone-500">ツモ</span>
-            <TileButton
-              tile={drawn}
-              size="lg"
-              selected={selected === drawn && coach?.discard !== drawn}
-              recommended={Boolean(coach && coach.discard === drawn)}
-              dimmed={Boolean(coach && coach.discard !== drawn)}
-              onClick={() => setSelected(drawn)}
-            />
-          </div>
-        )}
-      </section>
-
-      {humanTurn && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-stone-200 bg-stone-100/95 px-3 py-3 backdrop-blur">
-          <div className="mx-auto flex max-w-lg gap-2">
-            {humanCanTsumo && (
+        {settingsOpen && (
+          <div className="absolute right-2 top-36 z-30 w-40 rounded-lg border border-amber-400/50 bg-emerald-950/95 p-2 shadow-xl sm:right-3">
+            <button
+              type="button"
+              onClick={restart}
+              className="w-full rounded px-2 py-2 text-left text-xs text-white hover:bg-white/10"
+            >
+              配り直し
+            </button>
+            {onExit && (
               <button
                 type="button"
-                onClick={() => setMatch((m) => declareTsumo(m))}
-                className="rounded-xl bg-rose-600 px-3 py-3.5 text-sm font-bold text-white active:scale-[0.98]"
+                onClick={() => {
+                  setSettingsOpen(false);
+                  onExit();
+                }}
+                className="w-full rounded px-2 py-2 text-left text-xs text-white hover:bg-white/10"
               >
-                ツモ
+                レッスンに戻る
               </button>
             )}
             <button
               type="button"
-              onClick={() => selected && humanDiscard(selected)}
-              disabled={!selected}
-              className="flex-[1.2] rounded-xl bg-stone-900 py-3.5 text-base font-bold text-white disabled:opacity-40 active:scale-[0.98]"
+              onClick={() => setSettingsOpen(false)}
+              className="w-full rounded px-2 py-2 text-left text-xs text-white/70 hover:bg-white/10"
             >
-              切る
-            </button>
-            <button
-              type="button"
-              onClick={askCoach}
-              disabled={coachLoading}
-              className="flex-1 rounded-xl bg-amber-500 py-3.5 text-sm font-bold text-white disabled:opacity-50 active:scale-[0.98]"
-            >
-              {coachLoading ? "考え中…" : "コーチに聞く"}
-            </button>
-            <button
-              type="button"
-              onClick={() => drawn && humanDiscard(drawn)}
-              disabled={!drawn}
-              className="rounded-xl border border-stone-300 bg-white px-3 py-3.5 text-xs font-semibold text-stone-700 disabled:opacity-40 active:scale-[0.98]"
-            >
-              ツモ切
+              閉じる
             </button>
           </div>
+        )}
+
+        {/* Center table: rivers + box */}
+        <div className="relative mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col items-center justify-center py-1">
+          {/* Top river (西 対面) */}
+          <div className="mb-1 flex min-h-[32px] justify-center">
+            <RiverGrid
+              tiles={match.seats[top].river}
+              last={lastDisc?.seat === top ? lastDisc.tile : null}
+              rotate={180}
+            />
+          </div>
+
+          <div className="flex w-full items-center justify-center gap-1 sm:gap-2">
+            {/* Left river (北 上家) */}
+            <div className="flex w-[72px] justify-center sm:w-[88px]">
+              <RiverGrid
+                tiles={match.seats[left].river}
+                last={lastDisc?.seat === left ? lastDisc.tile : null}
+                rotate={270}
+              />
+            </div>
+
+            <CenterBox
+              roundLabel={match.roundLabel}
+              remaining={match.wall.length}
+              turn={match.turn}
+              phase={match.phase}
+            />
+
+            {/* Right river (南 下家) */}
+            <div className="flex w-[72px] justify-center sm:w-[88px]">
+              <RiverGrid
+                tiles={match.seats[right].river}
+                last={lastDisc?.seat === right ? lastDisc.tile : null}
+                rotate={90}
+              />
+            </div>
+          </div>
+
+          {/* Bottom river (東 あなた) */}
+          <div className="mt-1 flex min-h-[32px] justify-center">
+            <RiverGrid
+              tiles={match.seats[bottom].river}
+              last={lastDisc?.seat === bottom ? lastDisc.tile : null}
+            />
+          </div>
         </div>
-      )}
 
-      {error && (
-        <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
-      )}
-
-      {coach && (
-        <section className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm space-y-3">
-          <h2 className="text-sm font-semibold text-emerald-800">
-            推奨: {TILE_NAME_JA[coach.discard]}（{coach.discard}）
-          </h2>
-          <ScoreBars scores={coach.scores} difficulty="advanced" />
-          <p className="text-sm leading-relaxed text-stone-700">
-            {coach.explanation}
+        {/* Human score + prompt */}
+        <div className="relative z-10 mt-auto px-1 pb-1">
+          <p
+            className={[
+              "mb-1 text-center text-xs font-medium sm:text-sm",
+              humanTurn ? "text-amber-200" : "text-white/85",
+            ].join(" ")}
+          >
+            {promptText}
           </p>
-          {humanTurn && (
-            <button
-              type="button"
-              onClick={() => humanDiscard(coach.discard)}
-              className="w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white active:scale-[0.98]"
-            >
-              推奨牌を切る
-            </button>
+          <ScoreLabel seat={bottom} highlight className="mb-2 text-center" />
+
+          {/* Ron overlay */}
+          {humanCanRon && lastDisc && (
+            <div className="mb-2 flex justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMatch((m) => declareRon(m, HUMAN_SEAT))}
+                className="rounded-lg bg-rose-600 px-5 py-2.5 text-sm font-bold text-white shadow"
+              >
+                ロン
+              </button>
+              <button
+                type="button"
+                onClick={() => setRonPassKey(lastDiscardKey)}
+                className="rounded-lg border border-white/40 bg-black/30 px-5 py-2.5 text-sm font-medium text-white"
+              >
+                スルー
+              </button>
+            </div>
           )}
-        </section>
-      )}
+
+          {/* End overlay */}
+          {(match.phase === "ended" || showRyuukyoku) && (
+            <div className="mb-2 rounded-xl border border-amber-400/40 bg-emerald-950/90 px-3 py-3 text-center">
+              <p className="text-sm font-semibold text-white">
+                {match.endReason || "流局"}
+              </p>
+              <p className="mt-1 text-[10px] text-white/60">
+                ※ 簡易ルール（役・点数・鳴きなし。形完成のツモ/ロンのみ）
+              </p>
+              <div className="mt-2 flex justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={restart}
+                  className="rounded-lg bg-[#c4a574] px-4 py-2 text-sm font-bold text-stone-900"
+                >
+                  もう一度
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRyuukyoku(false)}
+                  className="rounded-lg border border-white/30 px-3 py-2 text-xs text-white"
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Hand + 解説 */}
+          <div className="flex items-end gap-2">
+            <div className="flex shrink-0 flex-col gap-1.5 pb-1">
+              <button
+                type="button"
+                onClick={askCoach}
+                disabled={!humanTurn || coachLoading}
+                className="min-h-[44px] min-w-[56px] rounded-lg bg-[#c4a574] px-3 py-2 text-sm font-bold text-stone-900 shadow-md disabled:opacity-40 active:scale-[0.98]"
+              >
+                {coachLoading ? "…" : "解説"}
+              </button>
+              {humanTurn && humanCanTsumo && (
+                <button
+                  type="button"
+                  onClick={() => setMatch((m) => declareTsumo(m))}
+                  className="rounded-lg bg-rose-600 px-2 py-1.5 text-xs font-bold text-white"
+                >
+                  ツモ
+                </button>
+              )}
+              {humanTurn && selected && (
+                <button
+                  type="button"
+                  onClick={() => humanDiscard(selected)}
+                  className="rounded-lg bg-stone-900/80 px-2 py-1.5 text-xs font-bold text-white"
+                >
+                  切る
+                </button>
+              )}
+              {humanTurn && drawn && (
+                <button
+                  type="button"
+                  onClick={() => humanDiscard(drawn)}
+                  className="rounded-lg border border-white/40 px-2 py-1.5 text-[10px] font-semibold text-white"
+                >
+                  ツモ切
+                </button>
+              )}
+            </div>
+
+            <div className="min-w-0 flex-1 overflow-x-auto pb-1">
+              <div className="flex justify-center gap-0.5 sm:gap-1">
+                {closed.map((t, i) => (
+                  <TileButton
+                    key={`${t}-${i}-h`}
+                    tile={t}
+                    size="hand"
+                    glow={humanTurn && selected === t}
+                    recommended={Boolean(coach && coach.discard === t)}
+                    dimmed={Boolean(coach && coach.discard !== t && selected !== t)}
+                    onClick={humanTurn ? () => onTileTap(t) : undefined}
+                  />
+                ))}
+                {humanTurn && drawn && (
+                  <>
+                    <span className="mx-0.5 w-px self-stretch bg-white/20" />
+                    <TileButton
+                      tile={drawn}
+                      size="hand"
+                      glow={selected === drawn}
+                      recommended={Boolean(coach && coach.discard === drawn)}
+                      dimmed={Boolean(
+                        coach && coach.discard !== drawn && selected !== drawn
+                      )}
+                      onClick={() => onTileTap(drawn)}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {error && (
+            <p className="mt-1 rounded-lg bg-red-900/80 px-2 py-1 text-center text-xs text-red-100">
+              {error}
+            </p>
+          )}
+
+          {coach && (
+            <section className="mt-2 max-h-36 overflow-y-auto rounded-xl border border-amber-400/30 bg-emerald-950/95 p-3 text-white shadow-lg">
+              <h2 className="text-xs font-semibold text-amber-200">
+                推奨: {TILE_NAME_JA[coach.discard]}（{coach.discard}）
+              </h2>
+              <div className="mt-1 [&_*]:text-white">
+                <ScoreBars scores={coach.scores} difficulty="advanced" />
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-white/90">
+                {coach.explanation}
+              </p>
+              {humanTurn && (
+                <button
+                  type="button"
+                  onClick={() => humanDiscard(coach.discard)}
+                  className="mt-2 w-full rounded-lg bg-[#c4a574] py-2 text-xs font-bold text-stone-900"
+                >
+                  推奨牌を切る
+                </button>
+              )}
+            </section>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

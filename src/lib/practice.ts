@@ -13,8 +13,29 @@ export const SEAT_LABEL: Record<Seat, string> = {
   N: "北",
 };
 
-/** Human is fixed South (自家 at bottom). */
-export const HUMAN_SEAT: Seat = "S";
+/**
+ * Human is East at bottom of the table view (matches riichi table UI reference).
+ * Relative labels from human perspective:
+ * E=あなた, S=下家, W=対面, N=上家
+ */
+export const HUMAN_SEAT: Seat = "E";
+
+export const RELATIVE_LABEL: Record<Seat, string> = {
+  E: "あなた",
+  S: "下家",
+  W: "対面",
+  N: "上家",
+};
+
+/** Visual layout seats: bottom / right / top / left from human's view. */
+export const VIEW_SEATS = {
+  bottom: "E" as Seat,
+  right: "S" as Seat,
+  top: "W" as Seat,
+  left: "N" as Seat,
+};
+
+export const START_SCORE = 25000;
 
 export type SeatState = {
   hand: TileId[];
@@ -39,6 +60,10 @@ export type MatchState = {
   winner: Seat | null;
   /** Last discarded tile for brief highlight. */
   lastDiscard: { seat: Seat; tile: TileId } | null;
+  /** Dora indicator tile (simplified: peeked, not removed from wall). */
+  doraIndicator: TileId;
+  /** Round label e.g. 東一局 */
+  roundLabel: string;
 };
 
 export function nextSeat(seat: Seat): Seat {
@@ -66,6 +91,9 @@ export function createMatch(): MatchState {
     seats[seat].hand = sortHand(seats[seat].hand);
   }
 
+  // Simplified dora: peek last wall tile without removing
+  const doraIndicator = wall[0] ?? "1m";
+
   return {
     wall,
     seats,
@@ -77,6 +105,8 @@ export function createMatch(): MatchState {
     endKind: null,
     winner: null,
     lastDiscard: null,
+    doraIndicator,
+    roundLabel: "東一局",
   };
 }
 
@@ -235,4 +265,8 @@ export function endPractice(
     endKind: "abort",
     endReason: reason,
   };
+}
+
+export function formatScore(n: number): string {
+  return n.toLocaleString("ja-JP");
 }

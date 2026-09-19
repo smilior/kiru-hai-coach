@@ -359,6 +359,10 @@ export function CoachApp({ embedded = false }: CoachAppProps) {
     );
   }
 
+  if (mode === "practice") {
+    return <PracticeApp onExit={() => setMode("lesson")} />;
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 py-5 pb-24">
       <header className="text-center">
@@ -367,15 +371,13 @@ export function CoachApp({ embedded = false }: CoachAppProps) {
         </p>
         <h1 className="mt-1 text-2xl font-bold text-stone-900">切る牌コーチ</h1>
         <p className="mt-1 text-sm text-stone-600">
-          {mode === "lesson"
-            ? "迷ったらタップ。Jevが切る牌と理由を教えます。"
-            : "CPU3人と1局。あなたの番だけJevが助言します。"}
+          迷ったらタップ。Jevが切る牌と理由を教えます。
         </p>
       </header>
 
       <ModeTabs mode={mode} onChange={setMode} />
 
-      {mode === "practice" ? <PracticeApp /> : lessonBody}
+      {lessonBody}
     </div>
   );
 }
